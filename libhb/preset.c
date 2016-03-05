@@ -1320,6 +1320,12 @@ int hb_preset_apply_filters(const hb_dict_t *preset, hb_dict_t *job_dict)
         hb_dict_set(filter_settings, "rate", hb_value_string(str));
         free(str);
     }
+    if (hb_validate_filter_settings(HB_FILTER_VFR, filter_settings))
+    {
+        hb_error("hb_preset_apply_filters: Internal error, invalid VFR");
+        hb_value_free(&filter_settings);
+        return -1;
+    }
 
     filter_dict = hb_dict_init();
     hb_dict_set(filter_dict, "ID", hb_value_int(HB_FILTER_VFR));
@@ -1649,6 +1655,12 @@ int hb_preset_apply_title(hb_handle_t *h, int title_index,
     hb_dict_set(filter_settings, "crop-bottom", hb_value_int(geo.crop[1]));
     hb_dict_set(filter_settings, "crop-left", hb_value_int(geo.crop[2]));
     hb_dict_set(filter_settings, "crop-right", hb_value_int(geo.crop[3]));
+    if (hb_validate_filter_settings(HB_FILTER_CROP_SCALE, filter_settings))
+    {
+        hb_error("hb_preset_apply_title: Internal error, invalid CROP_SCALE");
+        hb_value_free(&filter_settings);
+        goto fail;
+    }
 
     filter_dict = hb_dict_init();
     hb_dict_set(filter_dict, "ID", hb_value_int(HB_FILTER_CROP_SCALE));
