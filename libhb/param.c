@@ -705,7 +705,7 @@ char * hb_filter_get_presets_json(int filter_id)
 }
 
 // Get json array of filter tune name and short_name
-char * hb_filter_get_tuness_json(int filter_id)
+char * hb_filter_get_tunes_json(int filter_id)
 {
     hb_value_array_t  * array = hb_value_array_init();
     int                 ii, count = 0;
