@@ -620,20 +620,18 @@ int hb_dict_extract_rational(hb_rational_t *dst, const hb_dict_t * dict,
         const char * str = hb_value_get_string(val);
         char ** rational = hb_str_vsplit(str, '/');
         if (rational[0] != NULL && rational[1] != NULL &&
-            isdigit(rational[0][1]) && isdigit(rational[1][1]))
+            isdigit(rational[0][0]) && isdigit(rational[1][0]))
         {
             char *num_end, *den_end;
 
             // found rational format value
             int num = strtol(rational[0], &num_end, 0);
-            int den = strtol(rational[0], &den_end, 0);
+            int den = strtol(rational[1], &den_end, 0);
             // confirm that the 2 components were entirely numbers
             if (num_end[0] == 0 && den_end[0] == 0)
             {
-                hb_dict_t * rational_dict = hb_dict_init();
-                hb_dict_set(rational_dict, "Num", hb_value_int(num));
-                hb_dict_set(rational_dict, "Den", hb_value_int(den));
-                hb_dict_set(rational_dict, key, rational_dict);
+                dst->num = num;
+                dst->den = den;
             }
             else
             {
