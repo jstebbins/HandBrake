@@ -37,6 +37,6 @@ char ** hb_filter_get_keys(int filter_id);
 char ** hb_filter_get_presets_short_name(int filter_id);
 char ** hb_filter_get_presets_name(int filter_id);
 char  * hb_filter_get_presets_json(int filter_id);
-char  * hb_filter_get_tuness_json(int filter_id);
+char  * hb_filter_get_tunes_json(int filter_id);
 
 #endif // HB_PARAM_H
