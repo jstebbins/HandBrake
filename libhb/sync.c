@@ -20,6 +20,18 @@
 #define SYNC_MAX_AUDIO_QUEUE_LEN    60
 #define SYNC_MIN_AUDIO_QUEUE_LEN    30
 
+// We do not place a limit on the number of subtitle frames
+// that are buffered (max_len == INT_MAX) becuase there are
+// cases where we will receive all the subtitles for a file
+// all at once (SSA subs).
+//
+// If we did not buffer these subs here, the following deadlock
+// condition would occur:
+//   1. Subtitle decoder blocks trying to generate more subtitle
+//      lines than will fit in sync input buffers.
+//   2. This blocks the reader. Reader doesn't read any more
+//      audio or video, so sync won't receive buffers it needs
+//      to unblock subtitles.
 #define SYNC_MAX_SUBTITLE_QUEUE_LEN INT_MAX
 #define SYNC_MIN_SUBTITLE_QUEUE_LEN 0
 
@@ -44,6 +56,15 @@ typedef struct
 } subtitle_sanitizer_t;
 
 typedef struct sync_common_s sync_common_t;
+
+#define SCR_HASH_SZ   (2 << 3)
+#define SCR_HASH_MASK (SCR_HASH_SZ - 1)
+
+typedef struct
+{
+    int                 scr_sequence;
+    int64_t             scr_offset;
+} scr_t;
 
 typedef struct
 {
@@ -113,13 +134,16 @@ typedef struct
 
 struct sync_common_s
 {
-    /* Audio/Video sync thread synchronization */
+    // Audio/Video sync thread synchronization
     hb_job_t      * job;
     hb_lock_t     * mutex;
     int             stream_count;
     sync_stream_t * streams;
     int             found_first_pts;
     int             done;
+
+    // SCR adjustments
+    scr_t           scr[SCR_HASH_SZ];
 
     // point-to-point support
     int         start_found;
@@ -181,16 +205,12 @@ static void signalBuffer( sync_stream_t * stream )
     }
 }
 
-static void allSlip( sync_common_t * common, int64_t delta )
+static void scrSlip( sync_common_t * common, int64_t delta )
 {
     int ii;
-    for (ii = 0; ii < common->stream_count; ii++)
+    for (ii = 0; ii < SCR_HASH_SZ; ii++)
     {
-        common->streams[ii].pts_slip += delta;
-        if (common->streams[ii].next_pts != (int64_t)AV_NOPTS_VALUE)
-        {
-            common->streams[ii].next_pts -= delta;
-        }
+        common->scr[ii].scr_offset += delta;
     }
 }
 
@@ -198,7 +218,7 @@ static void shiftTS( sync_common_t * common, int64_t delta )
 {
     int ii, jj;
 
-    allSlip(common, delta);
+    scrSlip(common, delta);
     for (ii = 0; ii < common->stream_count; ii++)
     {
         sync_stream_t * stream = &common->streams[ii];
@@ -206,12 +226,56 @@ static void shiftTS( sync_common_t * common, int64_t delta )
         for (jj = 0; jj < count; jj++)
         {
             hb_buffer_t * buf = hb_list_item(stream->in_queue, jj);
-            buf->s.start -= delta;
+            if (buf->s.start != AV_NOPTS_VALUE)
+            {
+                buf->s.start -= delta;
+            }
             if (buf->s.stop != AV_NOPTS_VALUE)
             {
                 buf->s.stop  -= delta;
             }
         }
+    }
+}
+
+static void computeInitialTS( sync_common_t * common )
+{
+    int ii;
+
+    for (ii = 0; ii < common->stream_count; ii++)
+    {
+        sync_stream_t * stream   = &common->streams[ii];
+
+        if (stream->type == SYNC_TYPE_SUBTITLE)
+        {
+            // Subtitle streams should not have undefined timestamps
+            continue;
+        }
+
+        int             count    = hb_list_count(stream->in_queue);
+        hb_buffer_t   * buf      = hb_list_item(stream->in_queue, 0);
+        hb_buffer_t   * prev;
+        double          next_pts;
+        int             jj;
+
+        next_pts = buf->s.start + buf->s.duration;
+        prev = buf;
+        for (jj = 1; jj < count; jj++)
+        {
+            buf  = hb_list_item(stream->in_queue, jj);
+            if (buf->s.start == AV_NOPTS_VALUE)
+            {
+                buf->s.start = next_pts;
+            }
+            else
+            {
+                next_pts      = buf->s.start;
+            }
+            next_pts     += buf->s.duration;
+            prev->s.stop  = buf->s.start;
+            prev          = buf;
+        }
+        prev->s.stop = prev->s.start + prev->s.duration;
     }
 }
 
@@ -233,22 +297,35 @@ static void checkFirstPts( sync_common_t * common )
         if (hb_list_count(stream->in_queue) > 0)
         {
             hb_buffer_t * buf = hb_list_item(stream->in_queue, 0);
-            if (first_pts > buf->s.start)
+            if (buf->s.start < first_pts)
             {
                 first_pts = buf->s.start;
             }
+            // Initialize SCR sequence for any buffers we have.
+            // The initial SCR offset will be the first pts found and is
+            // set in shiftTS().
+            int hash = buf->s.scr_sequence & SCR_HASH_MASK;
+            common->scr[hash].scr_sequence = buf->s.scr_sequence;
         }
     }
+    // We should *always* find a first pts because we let the queues
+    // fill before performing this test.
     if (first_pts != INT64_MAX)
     {
-        // Add a fudge factor to first pts to prevent negative
-        // timestamps from leaking through.  The pipeline can
-        // handle a positive offset, but some things choke on
-        // negative offsets
-        //first_pts -= 500000;
         shiftTS(common, first_pts);
+        common->found_first_pts = 1;
+        // We may have buffers that have no timestamps (i.e. AV_NOPTS_VALUE).
+        // Compute these timestamps based on previous buffer's timestamp
+        // and duration.
+        computeInitialTS(common);
+        // After this initialization, all AV_NOPTS_VALUE timestamps
+        // will be filled in by UpdateSCR()
     }
-    common->found_first_pts = 1;
+    else
+    {
+        // This should never happen
+        hb_error("checkFirstPts: No initial PTS found!\n");
+    }
 }
 
 static void addDelta( sync_common_t * common, int64_t start, int64_t delta)
@@ -566,8 +643,8 @@ static void fixAudioGap( sync_stream_t * stream )
     buf  = hb_list_item(stream->in_queue, 0);
     gap = buf->s.start - stream->next_pts;
 
-    // there's a gap of more than a minute between the last
-    // frame and this. assume we got a corrupted timestamp
+    // If there's a gap of more than a minute between the last
+    // frame and this, assume we got a corrupted timestamp.
     if (gap > 90 * 20 && gap < 90000LL * 60)
     {
         if (stream->gap_duration <= 0)
@@ -963,6 +1040,8 @@ static void OutputBuffer( sync_common_t * common )
         if (out_stream->next_pts == (int64_t)AV_NOPTS_VALUE)
         {
             // Initialize next_pts, it is used to make timestamp corrections
+            // If doing p-to-p encoding, it will get reinitialized when
+            // we find the start point.
             buf = hb_list_item(out_stream->in_queue, 0);
             out_stream->next_pts  = buf->s.start;
         }
@@ -1186,34 +1265,100 @@ static void updateDuration( sync_stream_t * stream, int64_t start )
     }
 }
 
+static void UpdateSCR( sync_stream_t * stream, hb_buffer_t * buf )
+{
+    hb_buffer_t *   last = NULL;
+    int             hash = buf->s.scr_sequence & SCR_HASH_MASK;
+    int             count = hb_list_count(stream->in_queue);
+    sync_common_t * common = stream->common;
+
+    if (count > 0)
+    {
+        last = hb_list_item(stream->in_queue, count - 1);
+    }
+    if (buf->s.scr_sequence != common->scr[hash].scr_sequence &&
+        buf->s.start        != AV_NOPTS_VALUE)
+    {
+        // New SCR.  Compute SCR offset
+        common->scr[hash].scr_sequence = buf->s.scr_sequence;
+        if (last != NULL)
+        {
+            common->scr[hash].scr_offset = buf->s.start -
+                                           (last->s.start + last->s.duration);
+        }
+        else
+        {
+            common->scr[hash].scr_offset = buf->s.start;
+        }
+    }
+
+    // Adjust buffer timestamps for SCR offset
+    if (buf->s.start != AV_NOPTS_VALUE)
+    {
+        buf->s.start -= common->scr[hash].scr_offset;
+    }
+    else if (last != NULL)
+    {
+        buf->s.start = last->s.start + last->s.duration;
+    }
+    else
+    {
+        // This should happen extremely rarely if ever.
+        // But if we get here, this is the first buffer received for
+        // this stream.  Normally, some buffers will be queued for
+        // every stream before we ever call UpdateSCR.
+        // We don't really know what it's timestamp should be,
+        // but 0 is a good guess.
+        buf->s.start = 0;
+    }
+    if (buf->s.stop != AV_NOPTS_VALUE)
+    {
+        buf->s.stop -= common->scr[hash].scr_offset;
+    }
+}
+
 static void QueueBuffer( sync_stream_t * stream, hb_buffer_t * buf )
 {
     hb_lock(stream->common->mutex);
 
-    // We do not place a limit on the number of subtitle frames
-    // that are buffered becuase there are cases where we will
-    // receive all the subtitles for a file all at once (SSA subs).
-    // If we did not buffer these subs here, the following deadlock
-    // condition would occur:
-    //   1. Subtitle decoder blocks trying to generate more subtitle
-    //      lines than will fit in sync input buffers.
-    //   2. This blocks the reader. Reader doesn't read any more
-    //      audio or video, so sync won't receive buffers it needs
-    //      to unblock subtitles.
     while (hb_list_count(stream->in_queue) > stream->max_len)
     {
         hb_cond_wait(stream->cond_full, stream->common->mutex);
     }
 
-    buf->s.start -= stream->pts_slip;
-    if (buf->s.stop != AV_NOPTS_VALUE)
-    {
-        buf->s.stop -= stream->pts_slip;
-    }
     // Render offset is only useful for decoders, which are all
     // upstream of sync.  Squash it.
     buf->s.renderOffset = AV_NOPTS_VALUE;
-    updateDuration(stream, buf->s.start);
+
+    if (stream->common->found_first_pts)
+    {
+        UpdateSCR(stream, buf);
+
+        // Apply any stream slips.
+        // Stream slips will only temporarily differ between
+        // the streams.  The slips get updated in applyDeltas.  When
+        // all the deltas are absorbed, the stream slips will all
+        // be equal.
+        buf->s.start -= stream->pts_slip;
+        if (buf->s.stop != AV_NOPTS_VALUE)
+        {
+            buf->s.stop -= stream->pts_slip;
+        }
+
+        updateDuration(stream, buf->s.start);
+    }
+    else
+    {
+        if (buf->s.start == AV_NOPTS_VALUE &&
+            hb_list_count(stream->in_queue) == 0)
+        {
+            // We require an initial pts to start synchronization
+            hb_buffer_close(&buf);
+            hb_unlock(stream->common->mutex);
+            return;
+        }
+    }
+
     hb_list_add(stream->in_queue, buf);
 
     // Make adjustments for gaps found in other streams
