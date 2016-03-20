@@ -1097,6 +1097,7 @@ static hb_buffer_t * hb_dvdread_read( hb_dvd_t * e )
     }
 
     d->block++;
+    b->s.new_chap = d->chapter;
 
     return b;
 }

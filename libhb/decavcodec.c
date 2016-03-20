@@ -64,6 +64,23 @@ hb_work_object_t hb_decavcodeca =
     .bsinfo = decavcodecaBSInfo
 };
 
+typedef struct
+{
+    uint8_t              * data;
+    int                    size;
+    int64_t                pts;
+    int64_t                dts;
+    int                    frametype;
+    int                    scr_sequence;
+    int                    new_chap;
+} packet_info_t;
+
+typedef struct
+{
+    int                    scr_sequence;
+    int                    new_chap;
+} reordered_data_t;
+
 struct hb_work_private_s
 {
     hb_job_t             * job;
@@ -79,6 +96,8 @@ struct hb_work_private_s
     double                 field_duration;  // field duration (for video)
     uint32_t               nframes;
     uint32_t               decode_errors;
+    packet_info_t          packet_info;
+    uint8_t                unfinished;
     struct SwsContext    * sws_context; // if we have to rescale or convert color space
     int                    sws_width;
     int                    sws_height;
@@ -100,12 +119,6 @@ struct hb_work_private_s
 
     hb_list_t            * list_subtitle;
 };
-
-typedef struct
-{
-    int scr_sequence;
-    int new_chap;
-} reordered_data_t;
 
 #ifdef USE_QSV_PTS_WORKAROUND
 // save/restore PTS if the decoder may not attach the right PTS to the frame
@@ -907,8 +920,7 @@ static int get_frame_type(int type)
  * The output of this function is stored in 'pv->list', which contains a list
  * of zero or more decoded packets.
  */
-static int decodeFrame( hb_work_object_t *w, hb_buffer_t * in,
-                        uint8_t *data, int size, int64_t pts, int64_t dts )
+static int decodeFrame( hb_work_object_t *w, packet_info_t * packet_info )
 {
     hb_work_private_t *pv = w->private_data;
     int got_picture, oldlevel = 0;
@@ -922,20 +934,32 @@ static int decodeFrame( hb_work_object_t *w, hb_buffer_t * in,
     }
 
     av_init_packet(&avp);
-    avp.data = data;
-    avp.size = size;
-    avp.pts  = pts;
-    avp.dts  = dts;
-    reordered = (reordered_data_t*)av_packet_new_side_data(&avp,
-                                AV_PKT_DATA_APP_PRIVATE, sizeof(*reordered));
-    if (reordered != NULL)
+    if (packet_info != NULL)
     {
-        reordered->scr_sequence = in->s.scr_sequence;
-        reordered->new_chap     = in->s.new_chap;
-        // decodeFrame can be called on the same buffer multiple times
-        // in the case the the buffer contains multiple frames.  So only
-        // attach new_chap to the first.
-        in->s.new_chap          = 0;
+        avp.data = packet_info->data;
+        avp.size = packet_info->size;
+        avp.pts  = packet_info->pts;
+        avp.dts  = packet_info->dts;
+        reordered = (reordered_data_t*)av_packet_new_side_data(&avp,
+                                AV_PKT_DATA_APP_PRIVATE, sizeof(*reordered));
+        if (reordered != NULL)
+        {
+            reordered->scr_sequence = packet_info->scr_sequence;
+            reordered->new_chap     = packet_info->new_chap;
+        }
+
+        // libav avcodec_decode_video2() needs AVPacket flagged with
+        // AV_PKT_FLAG_KEY for some codecs. For example, sequence of
+        // PNG in a mov container.
+        if (packet_info->frametype & HB_FRAME_KEY)
+        {
+            avp.flags |= AV_PKT_FLAG_KEY;
+        }
+    }
+    else
+    {
+        avp.data = NULL;
+        avp.size = 0;
     }
 
     if (pv->palette != NULL)
@@ -947,15 +971,6 @@ static int decodeFrame( hb_work_object_t *w, hb_buffer_t * in,
         size = MIN(pv->palette->size, AVPALETTE_SIZE);
         memcpy(palette, pv->palette->data, size);
         hb_buffer_close(&pv->palette);
-    }
-
-    /*
-     * libav avcodec_decode_video2() needs AVPacket flagged with AV_PKT_FLAG_KEY
-     * for some codecs. For example, sequence of PNG in a mov container.
-     */
-    if (in->s.frametype & HB_FRAME_KEY)
-    {
-        avp.flags |= AV_PKT_FLAG_KEY;
     }
 
     if (avcodec_decode_video2(pv->context, pv->frame, &got_picture, &avp) < 0)
@@ -997,8 +1012,8 @@ static int decodeFrame( hb_work_object_t *w, hb_buffer_t * in,
         // recompute the frame/field duration, because sometimes it changes
         compute_frame_duration( pv );
 
-        double pts;
-        double frame_dur = pv->duration;
+        int64_t pts;
+        double  frame_dur = pv->duration;
         if ( pv->frame->repeat_pict )
         {
             frame_dur += pv->frame->repeat_pict * pv->field_duration;
@@ -1088,10 +1103,10 @@ static int decodeFrame( hb_work_object_t *w, hb_buffer_t * in,
         out = copy_frame( pv );
         av_frame_unref(pv->frame);
 
-        out->s.start      = pts;
-        out->s.duration   = frame_dur;
-        out->s.flags      = flags;
-        out->s.frametype |= frametype;
+        out->s.start     = pts;
+        out->s.duration  = frame_dur;
+        out->s.flags     = flags;
+        out->s.frametype = frametype;
 
         hb_buffer_list_append(&pv->list, out);
         ++pv->nframes;
@@ -1114,6 +1129,25 @@ static void decodeVideo( hb_work_object_t *w, hb_buffer_t * in)
     int64_t  pts = in->s.start;
     int64_t  dts = in->s.renderOffset;
 
+    // There are a 3 scenarios that can happen here.
+    // 1. The buffer contains exactly one frame of data
+    // 2. The buffer contains multiple frames of data
+    // 3. The buffer contains a partial frame of data
+    //
+    // In scenario 2, we want to be sure that the timestamps are only
+    // applied to the first frame in the buffer.  Additional frames
+    // in the buffer will have their timestamps computed in sync.
+    //
+    // In scenario 3, we need to save the ancillary buffer info of an
+    // unfinished frame so it can be applied when we receive the last
+    // buffer of that frame.
+    if (!pv->unfinished)
+    {
+        // New packet, and no previous data pending
+        pv->packet_info.scr_sequence = in->s.scr_sequence;
+        pv->packet_info.new_chap     = in->s.new_chap;
+        pv->packet_info.frametype    = in->s.frametype;
+    }
     for (pos = 0; pos < in->size; pos += len)
     {
         uint8_t * pout;
@@ -1140,14 +1174,31 @@ static void decodeVideo( hb_work_object_t *w, hb_buffer_t * in)
 
         if (pout != NULL && pout_len > 0)
         {
-            decodeFrame(w, in, pout, pout_len, parser_pts, parser_dts);
+            pv->packet_info.data         = pout;
+            pv->packet_info.size         = pout_len;
+            pv->packet_info.pts          = parser_pts;
+            pv->packet_info.dts          = parser_dts;
+
+            decodeFrame(w, &pv->packet_info);
+
+            // There could have been an unfinished packet when we entered
+            // decodeVideo that is now finished.  The next packet is associated
+            // with the input buffer, so set it's chapter and scr info.
+            pv->packet_info.scr_sequence = in->s.scr_sequence;
+            pv->packet_info.new_chap     = in->s.new_chap;
+            pv->packet_info.frametype    = in->s.frametype;
+            pv->unfinished               = 0;
+        }
+        if (len > 0 && pout_len <= 0)
+        {
+            pv->unfinished               = 1;
         }
     }
 
     /* the stuff above flushed the parser, now flush the decoder */
     if (in->s.flags & HB_BUF_FLAG_EOF)
     {
-        while (decodeFrame(w, in, NULL, 0, AV_NOPTS_VALUE, AV_NOPTS_VALUE))
+        while (decodeFrame(w, NULL))
         {
             continue;
         }
@@ -1155,7 +1206,7 @@ static void decodeVideo( hb_work_object_t *w, hb_buffer_t * in)
         if (pv->qsv.decode)
         {
             // flush a second time
-            while (decodeFrame(w, in, NULL, 0, AV_NOPTS_VALUE, AV_NOPTS_VALUE))
+            while (decodeFrame(w, NULL))
             {
                 continue;
             }

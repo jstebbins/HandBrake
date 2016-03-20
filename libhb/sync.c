@@ -146,16 +146,16 @@ struct sync_common_s
     scr_t           scr[SCR_HASH_SZ];
 
     // point-to-point support
-    int         start_found;
+    int             start_found;
 
     // sync audio work objects
-    hb_list_t * list_work;
+    hb_list_t     * list_work;
 
     // UpdateState Statistics
-    int        est_frame_count;
-    uint64_t   st_counts[4];
-    uint64_t   st_dates[4];
-    uint64_t   st_first;
+    int             est_frame_count;
+    uint64_t        st_counts[4];
+    uint64_t        st_dates[4];
+    uint64_t        st_first;
 
     int             chapter;
 };
@@ -505,7 +505,7 @@ static void dejitterVideo( sync_stream_t * stream )
 // Fix video overlaps that could not be corrected by dejitter
 static void fixVideoOverlap( sync_stream_t * stream )
 {
-    int           drop = 0, new_chap = 0;
+    int           drop = 0;
     int64_t       overlap;
     hb_buffer_t * buf;
 
@@ -528,11 +528,6 @@ static void fixVideoOverlap( sync_stream_t * stream )
             {
                 stream->drop_pts = buf->s.start;
             }
-            // Preserve chapter marks
-            if (buf->s.new_chap > 0)
-            {
-                new_chap = buf->s.new_chap;
-            }
             hb_list_rem(stream->in_queue, buf);
             signalBuffer(stream);
             stream->drop_duration += buf->s.duration;
@@ -542,10 +537,6 @@ static void fixVideoOverlap( sync_stream_t * stream )
         }
         else
         {
-            if (new_chap > 0)
-            {
-                buf->s.new_chap = new_chap;
-            }
             break;
         }
     }

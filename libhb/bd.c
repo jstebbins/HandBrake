@@ -666,7 +666,7 @@ int hb_bd_seek( hb_bd_t * d, float f )
     uint64_t pos = f * d->duration;
 
     bd_seek_time(d->bd, pos);
-    d->next_chap = bd_get_current_chapter( d->bd ) + 1;
+    d->chapter = bd_get_current_chapter( d->bd ) + 1;
     hb_ts_stream_reset(d->stream);
     return 1;
 }
@@ -674,14 +674,14 @@ int hb_bd_seek( hb_bd_t * d, float f )
 int hb_bd_seek_pts( hb_bd_t * d, uint64_t pts )
 {
     bd_seek_time(d->bd, pts);
-    d->next_chap = bd_get_current_chapter( d->bd ) + 1;
+    d->chapter = bd_get_current_chapter( d->bd ) + 1;
     hb_ts_stream_reset(d->stream);
     return 1;
 }
 
 int hb_bd_seek_chapter( hb_bd_t * d, int c )
 {
-    d->next_chap = c;
+    d->chapter = c;
     bd_seek_chapter( d->bd, c - 1 );
     hb_ts_stream_reset(d->stream);
     return 1;

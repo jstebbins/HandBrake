@@ -56,7 +56,6 @@ static inline void save_chap( hb_psdemux_t *state, hb_buffer_t *buf )
     if ( state && buf->s.new_chap )
     {
         state->new_chap = buf->s.new_chap;
-        buf->s.new_chap = 0;
     }
 }
 
@@ -65,7 +64,6 @@ static inline void restore_chap( hb_psdemux_t *state, hb_buffer_t *buf )
     if ( state )
     {
         buf->s.new_chap = state->new_chap;
-        state->new_chap = 0;
     }
 }
 
