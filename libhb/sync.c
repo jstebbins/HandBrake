@@ -253,6 +253,10 @@ static void computeInitialTS( sync_common_t * common )
         }
 
         int             count    = hb_list_count(stream->in_queue);
+        if (count <= 0)
+        {
+            continue;
+        }
         hb_buffer_t   * buf      = hb_list_item(stream->in_queue, 0);
         hb_buffer_t   * prev;
         double          next_pts;

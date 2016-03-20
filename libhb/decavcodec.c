@@ -101,6 +101,12 @@ struct hb_work_private_s
     hb_list_t            * list_subtitle;
 };
 
+typedef struct
+{
+    int scr_sequence;
+    int new_chap;
+} reordered_data_t;
+
 #ifdef USE_QSV_PTS_WORKAROUND
 // save/restore PTS if the decoder may not attach the right PTS to the frame
 static void hb_av_add_new_pts(hb_list_t *list, int64_t new_pts)
@@ -747,9 +753,18 @@ static hb_buffer_t *copy_frame( hb_work_private_t *pv )
         h = pv->job->title->geometry.height;
     }
 
-    hb_buffer_t *out    = hb_video_buffer_init( w, h );
-    out->s.scr_sequence = pv->frame->reordered_opaque & 0xffffffff;
-    out->s.new_chap     = pv->frame->reordered_opaque >> 32;
+    AVFrameSideData  * sd;
+    reordered_data_t * reordered;
+    hb_buffer_t      * out = hb_video_buffer_init( w, h );
+
+    sd = av_frame_get_side_data(pv->frame, AV_FRAME_DATA_APP_PRIVATE);
+    if (sd != NULL && sd->data != NULL)
+    {
+        reordered = (reordered_data_t*)sd->data;
+        out->s.scr_sequence = reordered->scr_sequence;
+        out->s.new_chap     = reordered->new_chap;
+        av_frame_remove_side_data(pv->frame, AV_FRAME_DATA_APP_PRIVATE);
+    }
 
 #ifdef USE_QSV
     // no need to copy the frame data when decoding with QSV to opaque memory
@@ -898,6 +913,7 @@ static int decodeFrame( hb_work_object_t *w, hb_buffer_t * in,
     hb_work_private_t *pv = w->private_data;
     int got_picture, oldlevel = 0;
     AVPacket avp;
+    reordered_data_t * reordered;
 
     if ( global_verbosity_level <= 1 )
     {
@@ -910,6 +926,17 @@ static int decodeFrame( hb_work_object_t *w, hb_buffer_t * in,
     avp.size = size;
     avp.pts  = pts;
     avp.dts  = dts;
+    reordered = (reordered_data_t*)av_packet_new_side_data(&avp,
+                                AV_PKT_DATA_APP_PRIVATE, sizeof(*reordered));
+    if (reordered != NULL)
+    {
+        reordered->scr_sequence = in->s.scr_sequence;
+        reordered->new_chap     = in->s.new_chap;
+        // decodeFrame can be called on the same buffer multiple times
+        // in the case the the buffer contains multiple frames.  So only
+        // attach new_chap to the first.
+        in->s.new_chap          = 0;
+    }
 
     if (pv->palette != NULL)
     {
@@ -931,8 +958,6 @@ static int decodeFrame( hb_work_object_t *w, hb_buffer_t * in,
         avp.flags |= AV_PKT_FLAG_KEY;
     }
 
-    pv->context->reordered_opaque = ((uint64_t)in->s.new_chap << 32) |
-                                               in->s.scr_sequence;
     if (avcodec_decode_video2(pv->context, pv->frame, &got_picture, &avp) < 0)
     {
         ++pv->decode_errors;
