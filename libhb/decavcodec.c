@@ -111,6 +111,12 @@ struct hb_work_private_s
     hb_list_t            * list_subtitle;
 };
 
+typedef struct
+{
+    int scr_sequence;
+    int new_chap;
+} reordered_data_t;
+
 #ifdef USE_QSV_PTS_WORKAROUND
 // save/restore PTS if the decoder may not attach the right PTS to the frame
 static void hb_av_add_new_pts(hb_list_t *list, int64_t new_pts)
@@ -808,9 +814,18 @@ static hb_buffer_t *copy_frame( hb_work_private_t *pv )
     else
 #endif
     {
-        hb_buffer_t *out    = hb_video_buffer_init( w, h );
-        out->s.scr_sequence = pv->frame->reordered_opaque & 0xffffffff;
-        out->s.new_chap     = pv->frame->reordered_opaque >> 32;
+        AVFrameSideData  * sd;
+        reordered_data_t * reordered;
+        hb_buffer_t      * out = hb_video_buffer_init( w, h );
+
+        sd = av_frame_get_side_data(pv->frame, AV_FRAME_DATA_APP_PRIVATE);
+        if (sd != NULL && sd->data != NULL)
+        {
+            reordered = (reordered_data_t*)sd->data;
+            out->s.scr_sequence = reordered->scr_sequence;
+            out->s.new_chap     = reordered->new_chap;
+            av_frame_remove_side_data(pv->frame, AV_FRAME_DATA_APP_PRIVATE);
+        }
 			
 #ifdef USE_QSV
     // no need to copy the frame data when decoding with QSV to opaque memory
@@ -908,26 +923,6 @@ static void hb_ffmpeg_release_frame_buf( struct AVCodecContext *p_context, AVFra
         frame->data[i] = NULL;
 }
 #endif
-
-static void log_chapter( hb_work_private_t *pv, int chap_num, int64_t pts )
-{
-    hb_chapter_t *c;
-
-    if ( !pv->job )
-        return;
-
-    c = hb_list_item( pv->job->list_chapter, chap_num - 1 );
-    if ( c && c->title )
-    {
-        hb_log( "%s: \"%s\" (%d) at frame %u time %"PRId64,
-                pv->context->codec->name, c->title, chap_num, pv->nframes, pts );
-    }
-    else
-    {
-        hb_log( "%s: Chapter %d at frame %u time %"PRId64,
-                pv->context->codec->name, chap_num, pv->nframes, pts );
-    }
-}
 
 #define TOP_FIRST PIC_FLAG_TOP_FIELD_FIRST
 #define PROGRESSIVE PIC_FLAG_PROGRESSIVE_FRAME
@@ -1105,6 +1100,7 @@ static int decodeFrame( hb_work_object_t *w, hb_buffer_t * in,
     hb_work_private_t *pv = w->private_data;
     int got_picture, oldlevel = 0;
     AVPacket avp;
+    reordered_data_t * reordered;
 
     if ( global_verbosity_level <= 1 )
     {
@@ -1117,6 +1113,17 @@ static int decodeFrame( hb_work_object_t *w, hb_buffer_t * in,
     avp.size = size;
     avp.pts  = pts;
     avp.dts  = dts;
+    reordered = (reordered_data_t*)av_packet_new_side_data(&avp,
+                                AV_PKT_DATA_APP_PRIVATE, sizeof(*reordered));
+    if (reordered != NULL)
+    {
+        reordered->scr_sequence = in->s.scr_sequence;
+        reordered->new_chap     = in->s.new_chap;
+        // decodeFrame can be called on the same buffer multiple times
+        // in the case the the buffer contains multiple frames.  So only
+        // attach new_chap to the first.
+        in->s.new_chap          = 0;
+    }
 
     if (pv->palette != NULL)
     {
@@ -1138,8 +1145,6 @@ static int decodeFrame( hb_work_object_t *w, hb_buffer_t * in,
         avp.flags |= AV_PKT_FLAG_KEY;
     }
 
-    pv->context->reordered_opaque = ((uint64_t)in->s.new_chap << 32) |
-                                               in->s.scr_sequence;
     if (avcodec_decode_video2(pv->context, pv->frame, &got_picture, &avp) < 0)
     {
         ++pv->decode_errors;
@@ -1294,14 +1299,6 @@ static int decodeFrame( hb_work_object_t *w, hb_buffer_t * in,
         out->s.flags      = flags;
         out->s.frametype |= frametype;
 
-        if (out->s.new_chap)
-        {
-            log_chapter( pv, out->s.new_chap, out->s.start );
-        }
-        else if (pv->nframes == 0 && pv->job)
-        {
-            log_chapter( pv, pv->job->chapter_start, out->s.start );
-        }
         checkCadence( pv->cadence, flags, out->s.start );
         hb_buffer_list_append(&pv->list, out);
         ++pv->nframes;

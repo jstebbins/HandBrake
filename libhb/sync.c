@@ -251,6 +251,10 @@ static void computeInitialTS( sync_common_t * common )
         }
 
         int             count    = hb_list_count(stream->in_queue);
+        if (count <= 0)
+        {
+            continue;
+        }
         hb_buffer_t   * buf      = hb_list_item(stream->in_queue, 0);
         hb_buffer_t   * prev;
         double          next_pts;
@@ -850,6 +854,27 @@ static void streamFlush( sync_stream_t * stream )
     hb_buffer_list_append(&stream->out_queue, hb_buffer_eof_init());
 }
 
+static void log_chapter( sync_common_t *common, int chap_num,
+                         int nframes, int64_t pts )
+{
+    hb_chapter_t *c;
+
+    if ( !common->job )
+        return;
+
+    c = hb_list_item( common->job->list_chapter, chap_num - 1 );
+    if ( c && c->title )
+    {
+        hb_log("sync: \"%s\" (%d) at frame %d time %"PRId64,
+               c->title, chap_num, nframes, pts);
+    }
+    else
+    {
+        hb_log("sync: Chapter %d at frame %d time %"PRId64,
+               chap_num, nframes, pts );
+    }
+}
+
 // OutputBuffer pulls buffers from the internal sync buffer queues in
 // lowest PTS first order.  It then processes the queue the buffer is
 // pulled from for frame overlaps and gaps.
@@ -1092,6 +1117,12 @@ static void OutputBuffer( sync_common_t * common )
             if (out_stream->max_frame_duration < buf->s.duration)
             {
                 out_stream->max_frame_duration = buf->s.duration;
+            }
+            if (out_stream->type == SYNC_TYPE_VIDEO &&
+                buf->s.new_chap  != 0)
+            {
+                log_chapter(common, buf->s.new_chap, out_stream->frame_count,
+                            buf->s.start);
             }
             hb_buffer_list_append(&out_stream->out_queue, buf);
         }
