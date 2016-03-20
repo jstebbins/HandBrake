@@ -1949,15 +1949,6 @@ static void filter_loop( void * _f )
         if ( buf_in == NULL )
             continue;
 
-        // Filters can drop buffers.  Remember chapter information
-        // so that it can be propagated to the next buffer
-        if ( buf_in->s.new_chap )
-        {
-            f->chapter_time = buf_in->s.start;
-            f->chapter_val = buf_in->s.new_chap;
-            // don't let 'filter_loop' put a chapter mark on the wrong buffer
-            buf_in->s.new_chap = 0;
-        }
         if ( *f->done )
         {
             if( buf_in )
@@ -1989,12 +1980,6 @@ static void filter_loop( void * _f )
 
         }
 #endif
-        if ( buf_out && f->chapter_val && f->chapter_time <= buf_out->s.start )
-        {
-            buf_out->s.new_chap = f->chapter_val;
-            f->chapter_val = 0;
-        }
-
         if( buf_in )
         {
             hb_buffer_close( &buf_in );

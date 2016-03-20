@@ -197,7 +197,7 @@ static int avformatInit( hb_mux_object_t * m )
     job->mux_data = track;
 
     track->type = MUX_TYPE_VIDEO;
-    track->prev_chapter_tc = 0;
+    track->prev_chapter_tc = AV_NOPTS_VALUE;
     track->st = avformat_new_stream(m->oc, NULL);
     if (track->st == NULL)
     {
@@ -1144,10 +1144,12 @@ static int avformatMux(hb_mux_object_t *m, hb_mux_data_t *track, hb_buffer_t *bu
 
                 // chapter numbers start at 1, but the list starts at 0
                 chapter = hb_list_item(job->list_chapter,
-                                            track->current_chapter - 1);
+                                       track->current_chapter - 1);
 
                 // make sure we're not writing a chapter that has 0 length
-                if (chapter != NULL && track->prev_chapter_tc < pkt.pts)
+                if (chapter != NULL &&
+                    track->prev_chapter_tc != AV_NOPTS_VALUE &&
+                    track->prev_chapter_tc < pkt.pts)
                 {
                     char title[1024];
                     if (chapter->title != NULL)

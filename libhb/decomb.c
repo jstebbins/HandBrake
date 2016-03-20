@@ -1265,7 +1265,6 @@ static void process_frame( hb_filter_private_t * pv )
             hb_buffer_t *second = hb_buffer_list_tail(&pv->out_list);
             first->s.stop -= (first->s.stop - first->s.start) / 2LL;
             second->s.start = first->s.stop;
-            second->s.new_chap = 0;
         }
     }
 }

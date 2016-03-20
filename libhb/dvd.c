@@ -53,7 +53,7 @@ static hb_dvd_func_t *dvd_methods = &hb_dvdread_func;
  **********************************************************************/
 static void FindNextCell( hb_dvdread_t * );
 static int  dvdtime2msec( dvd_time_t * );
-static int hb_dvdread_is_break( hb_dvdread_t * d );
+static void hb_dvdread_set_chapter( hb_dvdread_t * d );
 
 hb_dvd_func_t * hb_dvdread_methods( void )
 {
@@ -1058,7 +1058,7 @@ static hb_buffer_t * hb_dvdread_read( hb_dvd_t * e )
 
                 if( d->cell_overlap )
                 {
-                    b->s.new_chap = hb_dvdread_is_break( d );
+                    hb_dvdread_set_chapter( d );
                     d->cell_overlap = 0;
                 }
             }
@@ -1097,6 +1097,7 @@ static hb_buffer_t * hb_dvdread_read( hb_dvd_t * e )
     }
 
     d->block++;
+    b->s.new_chap = d->chapter;
 
     return b;
 }
@@ -1137,11 +1138,11 @@ static int hb_dvdread_chapter( hb_dvd_t * e )
 }
 
 /***********************************************************************
- * hb_dvdread_is_break
+ * hb_dvdread_set_chapter
  ***********************************************************************
- * Returns chapter number if the current block is a new chapter start
+ * Sets chapter number if the current block is a new chapter start
  **********************************************************************/
-static int hb_dvdread_is_break( hb_dvdread_t * d )
+static void hb_dvdread_set_chapter( hb_dvdread_t * d )
 {
     int     i;
     int     pgc_id, pgn;
@@ -1165,11 +1166,9 @@ static int hb_dvdread_is_break( hb_dvdread_t * d )
         // This must not match against the start cell.
         if( pgc->cell_playback[cell].first_sector == d->block && cell != d->cell_start )
         {
-            return i + 1;
+            d->chapter = i + 1;
         }
     }
-
-    return 0;
 }
 
 /***********************************************************************

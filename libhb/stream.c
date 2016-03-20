@@ -1752,16 +1752,19 @@ int hb_stream_seek_chapter( hb_stream_t * stream, int chapter_num )
         return 0;
     }
 
-    int64_t sum_dur = 0;
-    hb_chapter_t *chapter = NULL;
-    int i;
+    // TODO: add chapter start time to hb_chapter_t
+    // The first chapter does not necessarily start at time 0.
+    int64_t        sum_dur = 0;
+    hb_chapter_t * chapter;
+    int            i;
     for ( i = 0; i < chapter_num; ++i)
     {
         chapter = hb_list_item( stream->title->list_chapter, i );
         sum_dur += chapter->duration;
     }
-    stream->chapter = chapter_num - 1;
-    stream->chapter_end = sum_dur;
+    stream->chapter     = 0;
+    // TODO: This should really be set to the start time of the first chapter.
+    stream->chapter_end = 0;
 
     if (chapter != NULL && chapter_num > 1)
     {
@@ -1795,7 +1798,7 @@ int hb_stream_seek_chapter( hb_stream_t * stream, int chapter_num )
  **********************************************************************/
 int hb_stream_chapter( hb_stream_t * src_stream )
 {
-    return( src_stream->chapter + 1 );
+    return( src_stream->chapter );
 }
 
 /***********************************************************************
@@ -4564,7 +4567,6 @@ static hb_buffer_t * generate_output_data(hb_stream_t *stream, int curstream)
         buf->s.id = get_id(pes_stream);
         buf->s.type = stream_kind_to_buf_type(pes_stream->stream_kind);
         buf->s.new_chap = b->s.new_chap;
-        b->s.new_chap = 0;
 
         // put the PTS & possible DTS into 'start' & 'renderOffset'
         // only put timestamps on the first output buffer for this PES packet.
@@ -4652,10 +4654,6 @@ hb_buffer_t * hb_ts_decode_pkt( hb_stream_t *stream, const uint8_t * pkt,
 
     hb_buffer_list_clear(&list);
 
-    if (chapter > 0)
-    {
-        stream->chapter = chapter;
-    }
     if (discontinuity)
     {
         // If there is a discontinuity, flush all data
@@ -4890,11 +4888,9 @@ hb_buffer_t * hb_ts_decode_pkt( hb_stream_t *stream, const uint8_t * pkt,
     // Add the payload for this packet to the current buffer
     hb_ts_stream_append_pkt(stream, curstream, pkt + 4 + adapt_len,
                             184 - adapt_len);
-    if (stream->chapter > 0 &&
-        stream->pes.list[ts_stream->pes_list].stream_kind == V)
+    if (stream->pes.list[ts_stream->pes_list].stream_kind == V)
     {
-        ts_stream->buf->s.new_chap = stream->chapter;
-        stream->chapter = 0;
+        ts_stream->buf->s.new_chap = chapter;
     }
 
     if (!ts_stream->pes_info_valid && ts_stream->buf->size >= 19)
@@ -5831,23 +5827,20 @@ hb_buffer_t * hb_ffmpeg_read( hb_stream_t *stream )
     if ( stream->ffmpeg_pkt->stream_index == stream->ffmpeg_video_id &&
          buf->s.start >= stream->chapter_end )
     {
+        stream->chapter++;
         hb_chapter_t *chapter = hb_list_item( stream->title->list_chapter,
-                                              stream->chapter+1 );
-        if( chapter )
+                                              stream->chapter - 1);
+        if (chapter != NULL)
         {
-            stream->chapter++;
             stream->chapter_end += chapter->duration;
-            buf->s.new_chap = stream->chapter + 1;
             hb_deep_log( 2, "ffmpeg_read starting chapter %i at %"PRId64,
                          stream->chapter + 1, buf->s.start);
         } else {
             // Must have run out of chapters, stop looking.
             stream->chapter_end = INT64_MAX;
-            buf->s.new_chap = 0;
         }
-    } else {
-        buf->s.new_chap = 0;
     }
+    buf->s.new_chap = stream->chapter;
     av_free_packet( stream->ffmpeg_pkt );
     return buf;
 }
