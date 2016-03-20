@@ -653,6 +653,50 @@ static hb_buffer_t *nal_encode( hb_work_object_t *w, x264_picture_t *pic_out,
         w->config->h264.init_delay = -pic_out->i_dts;
     }
 
+    /* Decide what type of frame we have. */
+    switch( pic_out->i_type )
+    {
+        case X264_TYPE_IDR:
+            // Handled in b_keyframe check below.
+            break;
+
+        case X264_TYPE_I:
+            buf->s.frametype = HB_FRAME_I;
+            break;
+
+        case X264_TYPE_P:
+            buf->s.frametype = HB_FRAME_P;
+            break;
+
+        case X264_TYPE_B:
+            buf->s.frametype = HB_FRAME_B;
+            break;
+
+    /*  This is for b-pyramid, which has reference b-frames
+        However, it doesn't seem to ever be used... */
+        case X264_TYPE_BREF:
+            buf->s.frametype = HB_FRAME_BREF;
+            break;
+
+        // If it isn't the above, what type of frame is it??
+        default:
+            buf->s.frametype = 0;
+            break;
+    }
+
+    // PIR has no IDR frames, but x264 marks recovery points
+    // as keyframes.  So fake an IDR at these points. This flag
+    // is also set for real IDR frames.
+    if (pic_out->b_keyframe)
+    {
+        buf->s.frametype = HB_FRAME_IDR;
+        /* if we have a chapter marker pending and this
+           frame's presentation time stamp is at or after
+           the marker's time stamp, use this as the
+           chapter start. */
+        hb_chapter_dequeue(pv->chapter_queue, buf);
+    }
+
     /* Encode all the NALs we were given into buf.
        NOTE: This code assumes one video frame per NAL (but there can
              be other stuff like SPS and/or PPS). If there are multiple
@@ -685,37 +729,6 @@ static hb_buffer_t *nal_encode( hb_work_object_t *w, x264_picture_t *pic_out,
                 break;
         }
 
-        /* Decide what type of frame we have. */
-        switch( pic_out->i_type )
-        {
-            case X264_TYPE_IDR:
-                // Handled in b_keyframe check below.
-                break;
-
-            case X264_TYPE_I:
-                buf->s.frametype = HB_FRAME_I;
-                break;
-
-            case X264_TYPE_P:
-                buf->s.frametype = HB_FRAME_P;
-                break;
-
-            case X264_TYPE_B:
-                buf->s.frametype = HB_FRAME_B;
-                break;
-
-        /*  This is for b-pyramid, which has reference b-frames
-            However, it doesn't seem to ever be used... */
-            case X264_TYPE_BREF:
-                buf->s.frametype = HB_FRAME_BREF;
-                break;
-
-            // If it isn't the above, what type of frame is it??
-            default:
-                buf->s.frametype = 0;
-                break;
-        }
-
         /* Since libx264 doesn't tell us when b-frames are
            themselves reference frames, figure it out on our own. */
         if( (buf->s.frametype == HB_FRAME_B) &&
@@ -727,19 +740,6 @@ static hb_buffer_t *nal_encode( hb_work_object_t *w, x264_picture_t *pic_out,
             buf->s.flags &= ~HB_FRAME_REF;
         else
             buf->s.flags |= HB_FRAME_REF;
-
-        // PIR has no IDR frames, but x264 marks recovery points
-        // as keyframes.  So fake an IDR at these points. This flag
-        // is also set for real IDR frames.
-        if (pic_out->b_keyframe)
-        {
-            buf->s.frametype = HB_FRAME_IDR;
-            /* if we have a chapter marker pending and this
-               frame's presentation time stamp is at or after
-               the marker's time stamp, use this as the
-               chapter start. */
-            hb_chapter_dequeue(pv->chapter_queue, buf);
-        }
 
         buf->size += size;
     }
