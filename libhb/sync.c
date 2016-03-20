@@ -72,6 +72,7 @@ typedef struct
 
     // Stream I/O control
     hb_list_t         * in_queue;
+    hb_list_t         * scr_delay_queue;
     int                 max_len;
     int                 min_len;
     hb_cond_t         * cond_full;
@@ -1260,7 +1261,46 @@ static void updateDuration( sync_stream_t * stream, int64_t start )
     }
 }
 
-static void UpdateSCR( sync_stream_t * stream, hb_buffer_t * buf )
+static void ProcessSCRDelayQueue( sync_common_t * common )
+{
+    int ii, jj;
+
+    for (ii = 0; ii < common->stream_count; ii++)
+    {
+        sync_stream_t * stream = &common->streams[ii];
+        if (stream->type != SYNC_TYPE_SUBTITLE)
+        {
+            // Only subtitles are delayed due to SCR
+            continue;
+        }
+        for (jj = 0; jj < hb_list_count(stream->scr_delay_queue);)
+        {
+            hb_buffer_t * buf = hb_list_item(stream->scr_delay_queue, jj);
+            int           hash = buf->s.scr_sequence & SCR_HASH_MASK;
+            if (buf->s.scr_sequence == common->scr[hash].scr_sequence)
+            {
+                if (buf->s.start != AV_NOPTS_VALUE)
+                {
+                    buf->s.start -= common->scr[hash].scr_offset;
+                    buf->s.start -= stream->pts_slip;
+                }
+                if (buf->s.stop != AV_NOPTS_VALUE)
+                {
+                    buf->s.stop -= common->scr[hash].scr_offset;
+                    buf->s.stop -= stream->pts_slip;
+                }
+                hb_list_rem(stream->scr_delay_queue, buf);
+                hb_list_add(stream->in_queue, buf);
+            }
+            else
+            {
+                jj++;
+            }
+        }
+    }
+}
+
+static int UpdateSCR( sync_stream_t * stream, hb_buffer_t * buf )
 {
     hb_buffer_t *   last = NULL;
     int             hash = buf->s.scr_sequence & SCR_HASH_MASK;
@@ -1274,6 +1314,16 @@ static void UpdateSCR( sync_stream_t * stream, hb_buffer_t * buf )
     if (buf->s.scr_sequence != common->scr[hash].scr_sequence &&
         buf->s.start        != AV_NOPTS_VALUE)
     {
+        if (stream->type == SYNC_TYPE_SUBTITLE)
+        {
+            //  We can't compute an scr_offset from subtitles because
+            //  subtiles are not continuous.  i.e. the end of the last
+            //  subtitle does not define the beginning of the next.
+            //  So queue subtitles till a new scr_offset is computed
+            //  for the scr_sequence.
+            hb_list_add(stream->scr_delay_queue, buf);
+            return 0;
+        }
         // New SCR.  Compute SCR offset
         common->scr[hash].scr_sequence = buf->s.scr_sequence;
         if (last != NULL)
@@ -1285,6 +1335,7 @@ static void UpdateSCR( sync_stream_t * stream, hb_buffer_t * buf )
         {
             common->scr[hash].scr_offset = buf->s.start;
         }
+        ProcessSCRDelayQueue(common);
     }
 
     // Adjust buffer timestamps for SCR offset
@@ -1310,6 +1361,7 @@ static void UpdateSCR( sync_stream_t * stream, hb_buffer_t * buf )
     {
         buf->s.stop -= common->scr[hash].scr_offset;
     }
+    return 1;
 }
 
 static void QueueBuffer( sync_stream_t * stream, hb_buffer_t * buf )
@@ -1327,20 +1379,22 @@ static void QueueBuffer( sync_stream_t * stream, hb_buffer_t * buf )
 
     if (stream->common->found_first_pts)
     {
-        UpdateSCR(stream, buf);
-
-        // Apply any stream slips.
-        // Stream slips will only temporarily differ between
-        // the streams.  The slips get updated in applyDeltas.  When
-        // all the deltas are absorbed, the stream slips will all
-        // be equal.
-        buf->s.start -= stream->pts_slip;
-        if (buf->s.stop != AV_NOPTS_VALUE)
+        if (UpdateSCR(stream, buf))
         {
-            buf->s.stop -= stream->pts_slip;
-        }
+            // Apply any stream slips.
+            // Stream slips will only temporarily differ between
+            // the streams.  The slips get updated in applyDeltas.  When
+            // all the deltas are absorbed, the stream slips will all
+            // be equal.
+            buf->s.start -= stream->pts_slip;
+            if (buf->s.stop != AV_NOPTS_VALUE)
+            {
+                buf->s.stop -= stream->pts_slip;
+            }
 
-        updateDuration(stream, buf->s.start);
+            updateDuration(stream, buf->s.start);
+            hb_list_add(stream->in_queue, buf);
+        }
     }
     else
     {
@@ -1352,9 +1406,8 @@ static void QueueBuffer( sync_stream_t * stream, hb_buffer_t * buf )
             hb_unlock(stream->common->mutex);
             return;
         }
+        hb_list_add(stream->in_queue, buf);
     }
-
-    hb_list_add(stream->in_queue, buf);
 
     // Make adjustments for gaps found in other streams
     applyDeltas(stream->common);
@@ -1467,6 +1520,7 @@ static int InitSubtitle( sync_common_t * common, int index )
     pv->stream->cond_full         = hb_cond_init();
     if (pv->stream->cond_full == NULL) goto fail;
     pv->stream->in_queue          = hb_list_init();
+    pv->stream->scr_delay_queue   = hb_list_init();
     pv->stream->max_len           = SYNC_MAX_SUBTITLE_QUEUE_LEN;
     pv->stream->min_len           = SYNC_MIN_SUBTITLE_QUEUE_LEN;
     if (pv->stream->in_queue == NULL) goto fail;
