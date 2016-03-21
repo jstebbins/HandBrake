@@ -225,11 +225,13 @@ static void shiftTS( sync_common_t * common, int64_t delta )
     scrSlip(common, delta);
     for (ii = 0; ii < common->stream_count; ii++)
     {
+        hb_buffer_t   * buf = NULL;
         sync_stream_t * stream = &common->streams[ii];
-        int count = hb_list_count(stream->in_queue);
+        int             count = hb_list_count(stream->in_queue);
+
         for (jj = 0; jj < count; jj++)
         {
-            hb_buffer_t * buf = hb_list_item(stream->in_queue, jj);
+            buf = hb_list_item(stream->in_queue, jj);
             if (buf->s.start != AV_NOPTS_VALUE)
             {
                 buf->s.start -= delta;
@@ -238,6 +240,14 @@ static void shiftTS( sync_common_t * common, int64_t delta )
             {
                 buf->s.stop  -= delta;
             }
+        }
+        if (buf != NULL && buf->s.start != AV_NOPTS_VALUE)
+        {
+            stream->last_pts = buf->s.start + buf->s.duration;
+        }
+        else
+        {
+            stream->last_pts = AV_NOPTS_VALUE;
         }
     }
 }
