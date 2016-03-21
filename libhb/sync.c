@@ -175,6 +175,7 @@ struct hb_work_private_s
 static void UpdateState( sync_common_t * common, int frame_count );
 static void UpdateSearchState( sync_common_t * common, int64_t start,
                                int frame_count );
+static int  UpdateSCR( sync_stream_t * stream, hb_buffer_t * buf );
 static hb_buffer_t * FilterAudioFrame( sync_stream_t * stream,
                                        hb_buffer_t *buf );
 
@@ -241,57 +242,50 @@ static void shiftTS( sync_common_t * common, int64_t delta )
     }
 }
 
-static void computeInitialTS( sync_common_t * common )
+static void computeInitialTS( sync_common_t * common,
+                              sync_stream_t * first_stream )
 {
-    int ii;
+    int ii, count;
 
+    // Process first_stream first since it has the initial PTS
+    count = hb_list_count(first_stream->in_queue);
+    for (ii = 0; ii < count; ii++)
+    {
+        hb_buffer_t * buf = hb_list_item(first_stream->in_queue, ii);
+        UpdateSCR(first_stream, buf);
+    }
     for (ii = 0; ii < common->stream_count; ii++)
     {
-        sync_stream_t * stream   = &common->streams[ii];
+        sync_stream_t * stream = &common->streams[ii];
 
-        if (stream->type == SYNC_TYPE_SUBTITLE)
+        if (stream == first_stream)
         {
-            // Subtitle streams should not have undefined timestamps
+            // skip first_stream, already done
             continue;
         }
 
-        int             count    = hb_list_count(stream->in_queue);
-        if (count <= 0)
+        int jj;
+        for (jj = 0; jj < hb_list_count(stream->in_queue);)
         {
-            continue;
-        }
-        hb_buffer_t   * buf      = hb_list_item(stream->in_queue, 0);
-        hb_buffer_t   * prev;
-        double          next_pts;
-        int             jj;
-
-        next_pts = buf->s.start;
-        prev = buf;
-        for (jj = 1; jj < count; jj++)
-        {
-            buf  = hb_list_item(stream->in_queue, jj);
-            if (buf->s.start == AV_NOPTS_VALUE)
+            hb_buffer_t * buf = hb_list_item(stream->in_queue, jj);
+            if (!UpdateSCR(stream, buf))
             {
-                next_pts     += prev->s.duration;
-                buf->s.start  = next_pts;
+                // Subtitle put into delay queue, remove it from in_queue
+                hb_list_rem(stream->in_queue, buf);
             }
             else
             {
-                next_pts      = buf->s.start;
+                jj++;
             }
-            prev->s.stop  = buf->s.start;
-            prev          = buf;
         }
-        prev->s.stop          = prev->s.start + prev->s.duration;
-        stream->last_pts      = next_pts;
-        stream->last_duration = buf->s.duration;
     }
 }
 
 static void checkFirstPts( sync_common_t * common )
 {
-    int ii;
-    int64_t first_pts = INT64_MAX;
+    int             ii;
+    int64_t         first_pts = INT64_MAX;
+    sync_stream_t * first_stream = NULL;
 
     for (ii = 0; ii < common->stream_count; ii++)
     {
@@ -306,27 +300,22 @@ static void checkFirstPts( sync_common_t * common )
         if (hb_list_count(stream->in_queue) > 0)
         {
             hb_buffer_t * buf = hb_list_item(stream->in_queue, 0);
-            if (buf->s.start < first_pts)
+            if (buf->s.start != AV_NOPTS_VALUE && buf->s.start < first_pts)
             {
                 first_pts = buf->s.start;
+                first_stream = stream;
             }
-            // Initialize SCR sequence for any buffers we have.
-            // The initial SCR offset will be the first pts found and is
-            // set in shiftTS().
-            int hash = buf->s.scr_sequence & SCR_HASH_MASK;
-            common->scr[hash].scr_sequence = buf->s.scr_sequence;
         }
     }
     // We should *always* find a first pts because we let the queues
     // fill before performing this test.
     if (first_pts != INT64_MAX)
     {
-        shiftTS(common, first_pts);
         common->found_first_pts = 1;
         // We may have buffers that have no timestamps (i.e. AV_NOPTS_VALUE).
         // Compute these timestamps based on previous buffer's timestamp
         // and duration.
-        computeInitialTS(common);
+        computeInitialTS(common, first_stream);
         // After this initialization, all AV_NOPTS_VALUE timestamps
         // will be filled in by UpdateSCR()
     }
