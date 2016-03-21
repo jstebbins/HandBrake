@@ -130,58 +130,6 @@ struct hb_work_private_s
     hb_list_t            * list_subtitle;
 };
 
-#ifdef USE_QSV_PTS_WORKAROUND
-// save/restore PTS if the decoder may not attach the right PTS to the frame
-static void hb_av_add_new_pts(hb_list_t *list, int64_t new_pts)
-{
-    int index = 0;
-    int64_t *cur_item, *new_item;
-    if (list != NULL && new_pts != AV_NOPTS_VALUE)
-    {
-        new_item = malloc(sizeof(int64_t));
-        if (new_item != NULL)
-        {
-            *new_item = new_pts;
-            // sort chronologically
-            for (index = 0; index < hb_list_count(list); index++)
-            {
-                cur_item = hb_list_item(list, index);
-                if (cur_item != NULL)
-                {
-                    if (*cur_item == *new_item)
-                    {
-                        // no duplicates
-                        free(new_item);
-                        return;
-                    }
-                    if (*cur_item > *new_item)
-                    {
-                        // insert here
-                        break;
-                    }
-                }
-            }
-            hb_list_insert(list, index, new_item);
-        }
-    }
-}
-static int64_t hb_av_pop_next_pts(hb_list_t *list)
-{
-    int64_t *item, next_pts = AV_NOPTS_VALUE;
-    if (list != NULL && hb_list_count(list) > 0)
-    {
-        item = hb_list_item(list, 0);
-        if (item != NULL)
-        {
-            next_pts = *item;
-            hb_list_rem(list, item);
-            free(item);
-        }
-    }
-    return next_pts;
-}
-#endif
-
 static void decodeAudio( hb_work_private_t *pv, hb_buffer_t * buf,
                          uint8_t *data, int size, int64_t pts );
 
@@ -1206,14 +1154,21 @@ static int decodeFrame( hb_work_object_t *w, packet_info_t * packet_info )
             frame_dur += pv->frame->repeat_pict * pv->field_duration;
         }
 #ifdef USE_HWD
-        if( pv->dxva2 && pv->dxva2->do_job == HB_WORK_OK )
+        if (pv->dxva2 && pv->dxva2->do_job == HB_WORK_OK)
         {
-            if( avp.pts>0 )
+            if (avp.pts >= 0)
             {
-                if( pv->dxva2->input_pts[0] != 0 && pv->dxva2->input_pts[1] == 0 )
+                if (pv->dxva2->input_pts[0] != 0 &&
+                    pv->dxva2->input_pts[1] == 0)
+                {
                     pv->frame->pkt_pts = pv->dxva2->input_pts[0];
+                }
                 else
-                    pv->frame->pkt_pts = pv->dxva2->input_pts[0]<pv->dxva2->input_pts[1] ? pv->dxva2->input_pts[0] : pv->dxva2->input_pts[1];
+                {
+                    pv->frame->pkt_pts =
+                            pv->dxva2->input_pts[0] < pv->dxva2->input_pts[1] ?
+                            pv->dxva2->input_pts[0] : pv->dxva2->input_pts[1];
+                }
             }
         }
 #endif
@@ -1716,12 +1671,16 @@ static int decavcodecvWork( hb_work_object_t * w, hb_buffer_t ** buf_in,
     }
 
 #ifdef USE_HWD
-    if( pv->dxva2 && pv->dxva2->do_job == HB_WORK_OK )
+    if (pv->dxva2 && pv->dxva2->do_job == HB_WORK_OK)
     {
-        if( pv->dxva2->input_pts[0] <= pv->dxva2->input_pts[1] )
+        if (pv->dxva2->input_pts[0] <= pv->dxva2->input_pts[1])
+        {
             pv->dxva2->input_pts[0] = in->s.start;
-        else if( pv->dxva2->input_pts[0] > pv->dxva2->input_pts[1] )
+        }
+        else if (pv->dxva2->input_pts[0] > pv->dxva2->input_pts[1])
+        {
             pv->dxva2->input_pts[1] = in->s.start;
+        }
         pv->dxva2->input_dts = in->s.renderOffset;
     }
 #endif

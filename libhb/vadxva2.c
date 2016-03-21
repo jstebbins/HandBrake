@@ -708,8 +708,8 @@ void hb_va_new_dxva2( hb_va_dxva2_t *dxva2, AVCodecContext *p_context )
     }
     if( dxva2 )
     {
-        dxva2->input_pts[0] = 0;
-        dxva2->input_pts[1] = 0;
+        dxva2->input_pts[0] = AV_NOPTS_VALUE;
+        dxva2->input_pts[1] = AV_NOPTS_VALUE;
         if( dxva2->description )
             hb_log(  "dxva2:Using %s for hardware decoding", dxva2->description );
         p_context->draw_horiz_band = NULL;

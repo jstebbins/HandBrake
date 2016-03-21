@@ -1505,35 +1505,6 @@ void encqsvClose(hb_work_object_t *w)
     w->private_data = NULL;
 }
 
-static void restore_chapter(hb_work_private_t *pv, hb_buffer_t *buf)
-{
-    /* we're no longer looking for this chapter */
-    pv->next_chapter_pts = AV_NOPTS_VALUE;
-
-    /* get the chapter index from the list */
-    struct chapter_s *item = hb_list_item(pv->delayed_chapters, 0);
-
-    if (item != NULL)
-    {
-        /* we're done with this chapter */
-        hb_list_rem(pv->delayed_chapters, item);
-        buf->s.new_chap = item->index;
-        free(item);
-
-        /* we may still have another pending chapter */
-        item = hb_list_item(pv->delayed_chapters, 0);
-
-        if (item != NULL)
-        {
-            /*
-             * we're looking for this chapter now
-             * we still need it, don't remove it
-             */
-            pv->next_chapter_pts = item->start;
-        }
-    }
-}
-
 static void compute_init_delay(hb_work_private_t *pv, mfxBitstream *bs)
 {
     if (pv->init_delay == NULL)
