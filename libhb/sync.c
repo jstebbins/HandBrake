@@ -494,7 +494,7 @@ static void dejitterVideo( sync_stream_t * stream )
 
         // Only dejitter video that aligns periodically
         // with the frame durations.
-        if (ABS(duration - ii * frame_duration) < 0.1)
+        if (ABS(duration - ii * frame_duration) < frame_duration / 3)
         {
             jitter_stop = ii;
         }
@@ -1239,26 +1239,27 @@ static void Synchronize( sync_common_t * common )
     hb_unlock(common->mutex);
 }
 
-static void updateDuration( sync_stream_t * stream, int64_t start )
+static void updateDuration( sync_stream_t * stream )
 {
-    // The video decoder does not set an initial duration for frames.
-    // So set it here.
+    // The video decoder sets a nominal duration for frames.  But the
+    // actual duration needs to be computed from timestamps.
     if (stream->type == SYNC_TYPE_VIDEO)
     {
         int count = hb_list_count(stream->in_queue);
-        if (count > 0)
+        if (count >= 2)
         {
-            hb_buffer_t * buf = hb_list_item(stream->in_queue, count - 1);
-            double duration = start - buf->s.start;
+            hb_buffer_t * buf1 = hb_list_item(stream->in_queue, count - 1);
+            hb_buffer_t * buf2 = hb_list_item(stream->in_queue, count - 2);
+            double duration = buf1->s.start - buf2->s.start;
             if (duration > 0)
             {
-                buf->s.duration = duration;
-                buf->s.stop = start;
+                buf2->s.duration = duration;
+                buf2->s.stop = buf1->s.start;
             }
             else
             {
-                buf->s.duration = 0.;
-                buf->s.stop = buf->s.start;
+                buf2->s.duration = 0.;
+                buf2->s.start = buf2->s.stop = buf1->s.start;
             }
         }
     }
@@ -1366,6 +1367,82 @@ static int UpdateSCR( sync_stream_t * stream, hb_buffer_t * buf )
     return 1;
 }
 
+// Handle broken timestamps that are out of order
+// These are usually due to a broken decoder (e.g. QSV and libav AVI packed
+// b-frame support).  But sometimes can come from a severely broken or
+// corrupted source file.
+//
+// We can pretty reliably fix out of order timestamps *if* every frame
+// has a timestamp.  But some container formats allow frames with no
+// timestamp (e.g. TS and PS).  When there is no timestamp, we will
+// compute one based on the last frames timestamp.  If the missing
+// timestamp is out of order and really belonged on an earlier frame (A),
+// this will result in the frame before (A) being long and the frame
+// after the current will overlap current.
+//
+// The condition above of one long frame and one overlap will most likely
+// get fixed by dejitterVideo. dejitterVideo finds sequences where the
+// sum of the durations of frames 1..N == (1/fps) * N. When it finds such
+// a sequence, it adjusts the frame durations to all be 1/fps. Since the
+// vast majority of video is constant framerate, this will fix the above
+// problem most of the time.
+static void SortedQueueBuffer( sync_stream_t * stream, hb_buffer_t * buf )
+{
+    int64_t start;
+    int     ii, count;
+
+    start = buf->s.start;
+    hb_list_add(stream->in_queue, buf);
+
+    // Search for the first earlier timestamp that is < this one.
+    // Under normal circumstances where the timestamps are not broken,
+    // this will only check the next to last buffer in the queue
+    // before aborting.
+    count = hb_list_count(stream->in_queue);
+    for (ii = count - 2; ii >= 0; ii--)
+    {
+        buf = hb_list_item(stream->in_queue, ii);
+        if (buf->s.start < start)
+        {
+            break;
+        }
+    }
+    if (ii < count - 2)
+    {
+        hb_buffer_t * prev = NULL;
+        int           jj;
+
+        // The timestamp was out of order.
+        // The timestamp belongs at position ii + 1
+        // Every timestamp from ii + 2 to count - 1 needs to be shifted up.
+        if (ii >= 0)
+        {
+            prev = hb_list_item(stream->in_queue, ii);
+        }
+        for (jj = ii + 1; jj < count; jj++)
+        {
+            int64_t tmp_start;
+
+            buf = hb_list_item(stream->in_queue, jj);
+            tmp_start = buf->s.start;
+            buf->s.start = start;
+            start = tmp_start;
+            if (stream->type == SYNC_TYPE_VIDEO && prev != NULL)
+            {
+                // recompute video buffer duration
+                prev->s.duration = buf->s.start - prev->s.start;
+                prev->s.stop     = buf->s.start;
+            }
+            prev = buf;
+        }
+        stream->last_pts = start;
+    }
+    else
+    {
+        updateDuration(stream);
+    }
+}
+
 static void QueueBuffer( sync_stream_t * stream, hb_buffer_t * buf )
 {
     hb_lock(stream->common->mutex);
@@ -1394,8 +1471,7 @@ static void QueueBuffer( sync_stream_t * stream, hb_buffer_t * buf )
                 buf->s.stop -= stream->pts_slip;
             }
 
-            updateDuration(stream, buf->s.start);
-            hb_list_add(stream->in_queue, buf);
+            SortedQueueBuffer(stream, buf);
         }
     }
     else
