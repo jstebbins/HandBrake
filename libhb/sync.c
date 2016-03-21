@@ -83,6 +83,8 @@ typedef struct
     hb_list_t         * delta_list;
     int64_t             pts_slip;
     double              next_pts;
+    double              last_pts;
+    double              last_duration;
 
     // frame statistics
     int64_t             first_pts;
@@ -263,24 +265,26 @@ static void computeInitialTS( sync_common_t * common )
         double          next_pts;
         int             jj;
 
-        next_pts = buf->s.start + buf->s.duration;
+        next_pts = buf->s.start;
         prev = buf;
         for (jj = 1; jj < count; jj++)
         {
             buf  = hb_list_item(stream->in_queue, jj);
             if (buf->s.start == AV_NOPTS_VALUE)
             {
-                buf->s.start = next_pts;
+                next_pts     += prev->s.duration;
+                buf->s.start  = next_pts;
             }
             else
             {
                 next_pts      = buf->s.start;
             }
-            next_pts     += buf->s.duration;
             prev->s.stop  = buf->s.start;
             prev          = buf;
         }
-        prev->s.stop = prev->s.start + prev->s.duration;
+        prev->s.stop          = prev->s.start + prev->s.duration;
+        stream->last_pts      = next_pts;
+        stream->last_duration = buf->s.duration;
     }
 }
 
@@ -1302,15 +1306,9 @@ static void ProcessSCRDelayQueue( sync_common_t * common )
 
 static int UpdateSCR( sync_stream_t * stream, hb_buffer_t * buf )
 {
-    hb_buffer_t *   last = NULL;
     int             hash = buf->s.scr_sequence & SCR_HASH_MASK;
-    int             count = hb_list_count(stream->in_queue);
     sync_common_t * common = stream->common;
 
-    if (count > 0)
-    {
-        last = hb_list_item(stream->in_queue, count - 1);
-    }
     if (buf->s.scr_sequence != common->scr[hash].scr_sequence &&
         buf->s.start        != AV_NOPTS_VALUE)
     {
@@ -1326,10 +1324,10 @@ static int UpdateSCR( sync_stream_t * stream, hb_buffer_t * buf )
         }
         // New SCR.  Compute SCR offset
         common->scr[hash].scr_sequence = buf->s.scr_sequence;
-        if (last != NULL)
+        if (stream->last_pts != AV_NOPTS_VALUE)
         {
             common->scr[hash].scr_offset = buf->s.start -
-                                           (last->s.start + last->s.duration);
+                                   (stream->last_pts + stream->last_duration);
         }
         else
         {
@@ -1342,10 +1340,12 @@ static int UpdateSCR( sync_stream_t * stream, hb_buffer_t * buf )
     if (buf->s.start != AV_NOPTS_VALUE)
     {
         buf->s.start -= common->scr[hash].scr_offset;
+        stream->last_pts = buf->s.start;
     }
-    else if (last != NULL)
+    else if (stream->last_pts != AV_NOPTS_VALUE)
     {
-        buf->s.start = last->s.start + last->s.duration;
+        stream->last_pts += stream->last_duration;
+        buf->s.start = stream->last_pts;
     }
     else
     {
@@ -1356,11 +1356,14 @@ static int UpdateSCR( sync_stream_t * stream, hb_buffer_t * buf )
         // We don't really know what it's timestamp should be,
         // but 0 is a good guess.
         buf->s.start = 0;
+        stream->last_pts = buf->s.start;
     }
     if (buf->s.stop != AV_NOPTS_VALUE)
     {
         buf->s.stop -= common->scr[hash].scr_offset;
     }
+    stream->last_duration = buf->s.duration;
+
     return 1;
 }
 
@@ -1444,6 +1447,8 @@ static int InitAudio( sync_common_t * common, int index )
     pv->stream->type        = SYNC_TYPE_AUDIO;
     pv->stream->first_pts   = AV_NOPTS_VALUE;
     pv->stream->next_pts    = (int64_t)AV_NOPTS_VALUE;
+    pv->stream->last_pts    = AV_NOPTS_VALUE;
+    pv->stream->last_duration = AV_NOPTS_VALUE;
     pv->stream->audio.audio = audio;
     pv->stream->fifo_in     = audio->priv.fifo_raw;
 
@@ -1529,6 +1534,8 @@ static int InitSubtitle( sync_common_t * common, int index )
     pv->stream->type              = SYNC_TYPE_SUBTITLE;
     pv->stream->first_pts         = AV_NOPTS_VALUE;
     pv->stream->next_pts          = (int64_t)AV_NOPTS_VALUE;
+    pv->stream->last_pts          = AV_NOPTS_VALUE;
+    pv->stream->last_duration     = AV_NOPTS_VALUE;
     pv->stream->subtitle.subtitle = subtitle;
     pv->stream->fifo_in           = subtitle->fifo_raw;
 
@@ -1624,6 +1631,8 @@ static int syncVideoInit( hb_work_object_t * w, hb_job_t * job)
     pv->stream->type        = SYNC_TYPE_VIDEO;
     pv->stream->first_pts   = AV_NOPTS_VALUE;
     pv->stream->next_pts    = (int64_t)AV_NOPTS_VALUE;
+    pv->stream->last_pts    = AV_NOPTS_VALUE;
+    pv->stream->last_duration = AV_NOPTS_VALUE;
     pv->stream->fifo_in     = job->fifo_raw;
 
     w->fifo_in            = job->fifo_raw;
