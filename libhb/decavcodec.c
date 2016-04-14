@@ -75,11 +75,19 @@ typedef struct
     int                    new_chap;
 } packet_info_t;
 
-typedef struct
+typedef struct reordered_data_s reordered_data_t;
+
+struct reordered_data_s
 {
+    int64_t                sequence;
+    int64_t                pts;
     int                    scr_sequence;
     int                    new_chap;
-} reordered_data_t;
+    reordered_data_t     * next;
+};
+
+#define REORDERED_HASH_SZ   (2 << 7)
+#define REORDERED_HASH_MASK (REORDERED_HASH_SZ - 1)
 
 struct hb_work_private_s
 {
@@ -98,6 +106,8 @@ struct hb_work_private_s
     uint32_t               decode_errors;
     packet_info_t          packet_info;
     uint8_t                unfinished;
+    reordered_data_t     * reordered_hash[REORDERED_HASH_SZ];
+    int64_t                sequence;
     struct SwsContext    * sws_context; // if we have to rescale or convert color space
     int                    sws_width;
     int                    sws_height;
@@ -344,6 +354,24 @@ static void closePrivData( hb_work_private_t ** ppv )
         }
         hb_audio_resample_free(pv->resample);
 
+        int ii, dropped_frames = 0;
+        for (ii = 0; ii < REORDERED_HASH_SZ; ii++)
+        {
+            reordered_data_t * reordered = pv->reordered_hash[ii];
+
+            while (reordered != NULL)
+            {
+                reordered_data_t * next = reordered->next;
+                free(reordered);
+                reordered = next;
+                dropped_frames++;
+            }
+        }
+        if (dropped_frames > 0)
+        {
+            hb_deep_log(2, "decavcodec: decoder dropped %d frames",
+                        dropped_frames);
+        }
         free(pv);
     }
     *ppv = NULL;
@@ -671,6 +699,44 @@ static int decavcodecaBSInfo( hb_work_object_t *w, const hb_buffer_t *buf,
     return ret;
 }
 
+reordered_data_t *
+reordered_hash_rem(hb_work_private_t * pv, int64_t sequence)
+{
+    reordered_data_t * reordered, * prev = NULL;
+    int                bucket = sequence & REORDERED_HASH_MASK;
+
+    reordered = pv->reordered_hash[bucket];
+    while (reordered != NULL && reordered->sequence != sequence)
+    {
+        prev      = reordered;
+        reordered = reordered->next;
+    }
+    if (reordered == NULL)
+    {
+        // This shouldn't happen
+        hb_error("decavcodec: missing sequence %"PRId64"", sequence);
+        return NULL;
+    }
+    if (prev != NULL)
+    {
+        prev->next = reordered->next;
+    }
+    else
+    {
+        pv->reordered_hash[bucket] = reordered->next;
+    }
+    return reordered;
+}
+
+void
+reordered_hash_add(hb_work_private_t * pv, reordered_data_t * reordered)
+{
+    int bucket = reordered->sequence & REORDERED_HASH_MASK;
+
+    reordered->next = pv->reordered_hash[bucket];
+    pv->reordered_hash[bucket] = reordered;
+}
+
 /* -------------------------------------------------------------
  * General purpose video decoder using libavcodec
  */
@@ -714,17 +780,16 @@ static hb_buffer_t *copy_frame( hb_work_private_t *pv )
         h = pv->job->title->geometry.height;
     }
 
-    AVFrameSideData  * sd;
     reordered_data_t * reordered;
     hb_buffer_t      * out = hb_video_buffer_init( w, h );
 
-    sd = av_frame_get_side_data(pv->frame, AV_FRAME_DATA_APP_PRIVATE);
-    if (sd != NULL && sd->data != NULL)
+    reordered = reordered_hash_rem(pv, pv->frame->pkt_pts);
+    if (reordered != NULL)
     {
-        reordered = (reordered_data_t*)sd->data;
         out->s.scr_sequence = reordered->scr_sequence;
+        out->s.start        = reordered->pts;
         out->s.new_chap     = reordered->new_chap;
-        av_frame_remove_side_data(pv->frame, AV_FRAME_DATA_APP_PRIVATE);
+        pv->frame->pkt_pts  = reordered->pts;
     }
 
 #ifdef USE_QSV
@@ -886,15 +951,17 @@ static int decodeFrame( hb_work_object_t *w, packet_info_t * packet_info )
     {
         avp.data = packet_info->data;
         avp.size = packet_info->size;
-        avp.pts  = packet_info->pts;
-        avp.dts  = packet_info->dts;
-        reordered = (reordered_data_t*)av_packet_new_side_data(&avp,
-                                AV_PKT_DATA_APP_PRIVATE, sizeof(*reordered));
+        avp.pts  = pv->sequence;
+        avp.dts  = pv->sequence;
+        reordered = malloc(sizeof(*reordered));
         if (reordered != NULL)
         {
+            reordered->sequence     = pv->sequence++;
+            reordered->pts          = packet_info->pts;
             reordered->scr_sequence = packet_info->scr_sequence;
             reordered->new_chap     = packet_info->new_chap;
         }
+        reordered_hash_add(pv, reordered);
 
         // libav avcodec_decode_video2() needs AVPacket flagged with
         // AV_PKT_FLAG_KEY for some codecs. For example, sequence of
@@ -966,6 +1033,7 @@ static int decodeFrame( hb_work_object_t *w, packet_info_t * packet_info )
         {
             frame_dur += pv->frame->repeat_pict * pv->field_duration;
         }
+        hb_buffer_t * out = copy_frame( pv );
 
         // If there was no pts for this frame, assume constant frame rate
         // video & estimate the next frame time from the last & duration.
@@ -1046,9 +1114,6 @@ static int decodeFrame( hb_work_object_t *w, packet_info_t * packet_info )
             }
         }
 
-        hb_buffer_t * out;
-
-        out = copy_frame( pv );
         av_frame_unref(pv->frame);
 
         out->s.start     = pts;
