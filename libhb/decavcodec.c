@@ -1033,10 +1033,9 @@ static int decodeFrame( hb_work_object_t *w, packet_info_t * packet_info )
         {
             frame_dur += pv->frame->repeat_pict * pv->field_duration;
         }
+
         hb_buffer_t * out = copy_frame( pv );
 
-        // If there was no pts for this frame, assume constant frame rate
-        // video & estimate the next frame time from the last & duration.
         pts = pv->frame->pkt_pts;
 
         if ( pv->frame->top_field_first )
