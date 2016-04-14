@@ -607,7 +607,6 @@ struct hb_job_s
                                         //  initially (for frame accurate positioning
                                         //  to non-I frames).
     int use_opencl;
-    int use_hwd;
     PRIVATE int use_decomb;
     PRIVATE int use_detelecine;
 

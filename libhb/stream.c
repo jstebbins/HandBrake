@@ -845,9 +845,7 @@ hb_stream_open(hb_handle_t *h, char *path, hb_title_t *title, int scan)
     d->path = strdup( path );
     if (d->path != NULL )
     {
-        // XXX: DXVA2 integration code requires an AVFormatContext
-        // use lavf instead of our MPEG demuxer when it's enabled
-        if (!hb_hwd_enabled(d->h) && hb_stream_get_type( d ) != 0 )
+        if (hb_stream_get_type( d ) != 0)
         {
             if( !scan )
             {
