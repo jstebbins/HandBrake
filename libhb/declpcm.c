@@ -20,6 +20,7 @@ struct hb_work_private_s
     uint32_t    pos;        /* buffer offset for next input data */
 
     int64_t     next_pts;   /* pts for next output frame */
+    int         scr_sequence;
 
     /* the following is frame info for the frame we're currently accumulating */
     uint64_t    duration;   /* frame duratin (in 90KHz ticks) */
@@ -151,7 +152,8 @@ static void lpcmInfo( hb_work_object_t *w, hb_buffer_t *in )
     pv->nsamples = ( pv->duration * pv->samplerate ) / 90000;
     pv->size = pv->nchunks * chunk_size;
 
-    pv->next_pts = in->s.start;
+    pv->next_pts     = in->s.start;
+    pv->scr_sequence = in->s.scr_sequence;
 }
 
 static int declpcmInit( hb_work_object_t * w, hb_job_t * job )
@@ -336,10 +338,11 @@ static hb_buffer_t *Decode( hb_work_object_t *w )
 
     if (out != NULL)
     {
-        out->s.start    = pv->next_pts;
-        out->s.duration = pv->duration;
-        pv->next_pts   += pv->duration;
-        out->s.stop     = pv->next_pts;
+        out->s.start         = pv->next_pts;
+        out->s.duration      = pv->duration;
+        pv->next_pts        += pv->duration;
+        out->s.stop          = pv->next_pts;
+        out->s.scr_sequence  = pv->scr_sequence;
     }
     return out;
 }
