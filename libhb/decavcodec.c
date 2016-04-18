@@ -83,7 +83,6 @@ struct reordered_data_s
     int64_t                pts;
     int                    scr_sequence;
     int                    new_chap;
-    reordered_data_t     * next;
 };
 
 #define REORDERED_HASH_SZ   (2 << 7)
@@ -354,23 +353,10 @@ static void closePrivData( hb_work_private_t ** ppv )
         }
         hb_audio_resample_free(pv->resample);
 
-        int ii, dropped_frames = 0;
+        int ii;
         for (ii = 0; ii < REORDERED_HASH_SZ; ii++)
         {
-            reordered_data_t * reordered = pv->reordered_hash[ii];
-
-            while (reordered != NULL)
-            {
-                reordered_data_t * next = reordered->next;
-                free(reordered);
-                reordered = next;
-                dropped_frames++;
-            }
-        }
-        if (dropped_frames > 0)
-        {
-            hb_deep_log(2, "decavcodec: decoder dropped %d frames",
-                        dropped_frames);
+            free(pv->reordered_hash[ii]);
         }
         free(pv);
     }
@@ -702,39 +688,30 @@ static int decavcodecaBSInfo( hb_work_object_t *w, const hb_buffer_t *buf,
 reordered_data_t *
 reordered_hash_rem(hb_work_private_t * pv, int64_t sequence)
 {
-    reordered_data_t * reordered, * prev = NULL;
-    int                bucket = sequence & REORDERED_HASH_MASK;
+    reordered_data_t * reordered;
+    int                slot = sequence & REORDERED_HASH_MASK;
 
-    reordered = pv->reordered_hash[bucket];
-    while (reordered != NULL && reordered->sequence != sequence)
-    {
-        prev      = reordered;
-        reordered = reordered->next;
-    }
+    reordered = pv->reordered_hash[slot];
     if (reordered == NULL)
     {
         // This shouldn't happen
         hb_error("decavcodec: missing sequence %"PRId64"", sequence);
-        return NULL;
     }
-    if (prev != NULL)
-    {
-        prev->next = reordered->next;
-    }
-    else
-    {
-        pv->reordered_hash[bucket] = reordered->next;
-    }
+    pv->reordered_hash[slot] = NULL;
     return reordered;
 }
 
 void
 reordered_hash_add(hb_work_private_t * pv, reordered_data_t * reordered)
 {
-    int bucket = reordered->sequence & REORDERED_HASH_MASK;
+    int slot = reordered->sequence & REORDERED_HASH_MASK;
 
-    reordered->next = pv->reordered_hash[bucket];
-    pv->reordered_hash[bucket] = reordered;
+    // Free any unused previous entries.
+    // This can happen due to libav parser feeding partial
+    // frames data to the decoder.
+    // It can also happen due to decoding errors.
+    free(pv->reordered_hash[slot]);
+    pv->reordered_hash[slot] = reordered;
 }
 
 /* -------------------------------------------------------------
@@ -790,6 +767,7 @@ static hb_buffer_t *copy_frame( hb_work_private_t *pv )
         out->s.start        = reordered->pts;
         out->s.new_chap     = reordered->new_chap;
         pv->frame->pkt_pts  = reordered->pts;
+        free(reordered);
     }
 
 #ifdef USE_QSV
@@ -874,7 +852,7 @@ static void cc_send_to_decoder(hb_work_private_t *pv, hb_buffer_t *buf)
     hb_fifo_push( subtitle->fifo_in, buf );
 }
 
-static hb_buffer_t * cc_fill_buffer(hb_work_private_t *pv, uint8_t *cc, int size, int64_t pts)
+static hb_buffer_t * cc_fill_buffer(hb_work_private_t *pv, uint8_t *cc, int size)
 {
     int cc_count[4] = {0,};
     int ii;
@@ -894,7 +872,6 @@ static hb_buffer_t * cc_fill_buffer(hb_work_private_t *pv, uint8_t *cc, int size
     if (cc_count[0] > 0)
     {
         buf = hb_buffer_init(cc_count[0] * 2);
-        buf->s.start = pts;
         int jj = 0;
         for (ii = 0; ii < size; ii += 3)
         {
@@ -1027,16 +1004,12 @@ static int decodeFrame( hb_work_object_t *w, packet_info_t * packet_info )
         // recompute the frame/field duration, because sometimes it changes
         compute_frame_duration( pv );
 
-        int64_t pts;
         double  frame_dur = pv->duration;
         if ( pv->frame->repeat_pict )
         {
             frame_dur += pv->frame->repeat_pict * pv->field_duration;
         }
-
         hb_buffer_t * out = copy_frame( pv );
-
-        pts = pv->frame->pkt_pts;
 
         if ( pv->frame->top_field_first )
         {
@@ -1108,14 +1081,18 @@ static int decodeFrame( hb_work_object_t *w, packet_info_t * packet_info )
             if (pv->list_subtitle != NULL && sd->size > 0)
             {
                 hb_buffer_t *cc_buf;
-                cc_buf = cc_fill_buffer(pv, sd->data, sd->size, pts);
+                cc_buf = cc_fill_buffer(pv, sd->data, sd->size);
+                if (cc_buf != NULL)
+                {
+                    cc_buf->s.start        = out->s.start;
+                    cc_buf->s.scr_sequence = out->s.scr_sequence;
+                }
                 cc_send_to_decoder(pv, cc_buf);
             }
         }
 
         av_frame_unref(pv->frame);
 
-        out->s.start     = pts;
         out->s.duration  = frame_dur;
         out->s.flags     = flags;
         out->s.frametype = frametype;
