@@ -1296,6 +1296,14 @@ static void ProcessSCRDelayQueue( sync_common_t * common )
                 hb_list_rem(stream->scr_delay_queue, buf);
                 hb_list_add(stream->in_queue, buf);
             }
+            else if (buf->s.scr_sequence < 0)
+            {
+                // Unset scr_sequence inidicates an external subtitle (SRT)
+                // that is not on the same timebase as the source tracks.
+                // Do not adjust timestamps for scr_offset in this case.
+                hb_list_rem(stream->scr_delay_queue, buf);
+                hb_list_add(stream->in_queue, buf);
+            }
             else
             {
                 jj++;
@@ -1333,7 +1341,8 @@ static int UpdateSCR( sync_stream_t * stream, hb_buffer_t * buf )
     sync_common_t * common = stream->common;
     double          last_pts, last_duration;
 
-    if (buf->s.scr_sequence != common->scr[hash].scr_sequence &&
+    if (buf->s.scr_sequence != AV_NOPTS_VALUE                 &&
+        buf->s.scr_sequence != common->scr[hash].scr_sequence &&
         buf->s.start        != AV_NOPTS_VALUE)
     {
         if (stream->type == SYNC_TYPE_SUBTITLE)
