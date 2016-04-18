@@ -402,6 +402,7 @@ static int decsubWork( hb_work_object_t * w, hb_buffer_t ** buf_in,
                     out->s.start         = pts;
                     out->s.stop          = AV_NOPTS_VALUE;
                     out->s.renderOffset  = AV_NOPTS_VALUE;
+                    out->s.scr_sequence  = in->s.scr_sequence;
                     out->f.x             = x0;
                     out->f.y             = y0;
                     out->f.window_width  = pv->context->width;
@@ -460,14 +461,16 @@ static int decsubWork( hb_work_object_t * w, hb_buffer_t ** buf_in,
                 {
                     out = hb_buffer_init( 1 );
 
-                    out->s.frametype = HB_FRAME_SUBTITLE;
-                    out->s.id     = in->s.id;
-                    out->s.start  = pts;
-                    out->s.stop   = pts;
-                    out->f.x      = 0;
-                    out->f.y      = 0;
-                    out->f.width  = 0;
-                    out->f.height = 0;
+                    out->s.frametype    = HB_FRAME_SUBTITLE;
+                    out->s.id           = in->s.id;
+                    out->s.start        = pts;
+                    out->s.stop         = pts;
+                    out->s.renderOffset = AV_NOPTS_VALUE;
+                    out->s.scr_sequence = in->s.scr_sequence;
+                    out->f.x            = 0;
+                    out->f.y            = 0;
+                    out->f.width        = 0;
+                    out->f.height       = 0;
                 }
             }
             hb_buffer_list_append(&pv->list, out);
