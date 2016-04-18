@@ -5832,7 +5832,7 @@ hb_buffer_t * hb_ffmpeg_read( hb_stream_t *stream )
         {
             stream->chapter_end += chapter->duration;
             hb_deep_log( 2, "ffmpeg_read starting chapter %i at %"PRId64,
-                         stream->chapter + 1, buf->s.start);
+                         stream->chapter, buf->s.start);
         } else {
             // Must have run out of chapters, stop looking.
             stream->chapter_end = INT64_MAX;
