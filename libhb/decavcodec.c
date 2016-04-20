@@ -129,8 +129,7 @@ struct hb_work_private_s
     hb_list_t            * list_subtitle;
 };
 
-static void decodeAudio( hb_work_private_t *pv, hb_buffer_t * buf,
-                         uint8_t *data, int size, int64_t pts );
+static void decodeAudio( hb_work_private_t *pv, packet_info_t * packet_info );
 
 /***********************************************************************
  * hb_work_decavcodec_init
@@ -406,6 +405,25 @@ static int decavcodecaWork( hb_work_object_t * w, hb_buffer_t ** buf_in,
     int     pos, len;
     int64_t pts = in->s.start;
 
+    // There are a 3 scenarios that can happen here.
+    // 1. The buffer contains exactly one frame of data
+    // 2. The buffer contains multiple frames of data
+    // 3. The buffer contains a partial frame of data
+    //
+    // In scenario 2, we want to be sure that the timestamps are only
+    // applied to the first frame in the buffer.  Additional frames
+    // in the buffer will have their timestamps computed in sync.
+    //
+    // In scenario 3, we need to save the ancillary buffer info of an
+    // unfinished frame so it can be applied when we receive the last
+    // buffer of that frame.
+    if (!pv->unfinished)
+    {
+        // New packet, and no previous data pending
+        pv->packet_info.scr_sequence = in->s.scr_sequence;
+        pv->packet_info.new_chap     = in->s.new_chap;
+        pv->packet_info.frametype    = in->s.frametype;
+    }
     for (pos = 0; pos < in->size; pos += len)
     {
         uint8_t * pout;
@@ -428,7 +446,21 @@ static int decavcodecaWork( hb_work_object_t * w, hb_buffer_t ** buf_in,
         }
         if (pout != NULL && pout_len > 0)
         {
-            decodeAudio(pv, in, pout, pout_len, parser_pts);
+            pv->packet_info.data         = pout;
+            pv->packet_info.size         = pout_len;
+            pv->packet_info.pts          = parser_pts;
+
+            decodeAudio(pv, &pv->packet_info);
+
+            // There could have been an unfinished packet when we entered
+            // decodeVideo that is now finished.  The next packet is associated
+            // with the input buffer, so set it's chapter and scr info.
+            pv->packet_info.scr_sequence = in->s.scr_sequence;
+            pv->unfinished               = 0;
+        }
+        if (len > 0 && pout_len <= 0)
+        {
+            pv->unfinished               = 1;
         }
     }
     *buf_out = hb_buffer_list_clear(&pv->list);
@@ -1735,21 +1767,21 @@ hb_work_object_t hb_decavcodecv =
     .bsinfo = decavcodecvBSInfo
 };
 
-static void decodeAudio( hb_work_private_t *pv, hb_buffer_t * in,
-                         uint8_t *data, int size, int64_t pts )
+static void decodeAudio(hb_work_private_t *pv, packet_info_t * packet_info)
 {
-    AVCodecContext *context = pv->context;
-    int loop_limit = 256;
-    int pos = 0;
+    AVCodecContext * context = pv->context;
+    int              loop_limit = 256;
+    int              pos = 0;
+    int64_t          pts = packet_info->pts;
 
-    while (pos < size)
+    while (pos < packet_info->size)
     {
         int got_frame;
         AVPacket avp;
 
         av_init_packet(&avp);
-        avp.data = data + pos;
-        avp.size = size - pos;
+        avp.data = packet_info->data + pos;
+        avp.size = packet_info->size - pos;
         avp.pts  = pts;
         avp.dts  = AV_NOPTS_VALUE;
 
@@ -1836,12 +1868,12 @@ static void decodeAudio( hb_work_private_t *pv, hb_buffer_t * in,
 
             if (out != NULL)
             {
-                out->s.scr_sequence = in->s.scr_sequence;
+                out->s.scr_sequence = packet_info->scr_sequence;
                 out->s.start        = pv->frame->pkt_pts;
                 out->s.duration     = duration;
-                if (pts != AV_NOPTS_VALUE)
+                if (pv->frame->pkt_pts != AV_NOPTS_VALUE)
                 {
-                    out->s.stop       = pts + duration;
+                    out->s.stop     = pv->frame->pkt_pts + duration;
                 }
                 hb_buffer_list_append(&pv->list, out);
 
