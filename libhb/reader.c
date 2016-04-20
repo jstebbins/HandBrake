@@ -44,6 +44,8 @@ struct hb_work_private_s
 
     hb_psdemux_t   demux;
     int            scr_changes;
+    int64_t        scr_offset;
+    int64_t        last_pts;
 
     int            start_found;     // found pts_to_start point
     int64_t        pts_to_start;
@@ -441,19 +443,37 @@ static int reader_work( hb_work_object_t * w, hb_buffer_t ** buf_in,
 
     while ((buf = hb_buffer_list_rem_head(&list)) != NULL)
     {
-        if (buf->s.renderOffset != AV_NOPTS_VALUE ||
-            buf->s.start        != AV_NOPTS_VALUE)
+        if (buf->s.start   != AV_NOPTS_VALUE &&
+            r->scr_changes != r->demux.scr_changes)
         {
-            if (r->scr_changes != r->demux.scr_changes)
-            {
-                // First valid timestamp after an SCR change.  Update
-                // the per-stream scr sequence number
-                r->scr_changes = r->demux.scr_changes;
-            }
+            // First valid timestamp after an SCR change.  Update
+            // the per-stream scr sequence number
+            r->scr_changes = r->demux.scr_changes;
+
+            // libav tries to be too smart with timestamps and
+            // enforces unnecessary conditions.  One such condition
+            // is that subtitle timestamps must be monotonically
+            // increasing.  To encure this is the case, we calculate
+            // an offset upon each SCR change that will guarantee this.
+            // This is just a very rough SCR offset.  A fine grained
+            // offset that maintains proper sync is calculated in sync.c
+            r->scr_offset  = r->last_pts + 90000 - buf->s.start;
         }
         // Set the scr sequence that this buffer's timestamps are
         // referenced to.
         buf->s.scr_sequence = r->scr_changes;
+        if (buf->s.start != AV_NOPTS_VALUE)
+        {
+            buf->s.start += r->scr_offset;
+        }
+        if (buf->s.renderOffset != AV_NOPTS_VALUE)
+        {
+            buf->s.renderOffset += r->scr_offset;
+        }
+        if (buf->s.start > r->last_pts)
+        {
+            r->last_pts = buf->s.start;
+        }
 
         fifos = GetFifoForId( r, buf->s.id );
         if (fifos && r->stream && r->start_found == 2 )
