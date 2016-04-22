@@ -111,7 +111,6 @@ struct hb_work_private_s
     int                    sws_width;
     int                    sws_height;
     int                    sws_pix_fmt;
-    int                    cadence[12];
 
     hb_audio_t           * audio;
     hb_audio_resample_t  * resample;
