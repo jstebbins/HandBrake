@@ -50,8 +50,6 @@ struct hb_work_private_s
     int            start_found;     // found pts_to_start point
     int64_t        pts_to_start;
     int            chapter_end;
-    uint64_t       st_first;
-    uint64_t       duration;
     hb_fifo_t   ** fifos;
 
     buffer_splice_list_t * splice_list;
@@ -62,7 +60,6 @@ struct hb_work_private_s
  * Local prototypes
  **********************************************************************/
 static hb_fifo_t ** GetFifoForId( hb_work_private_t * r, int id );
-static void UpdateState( hb_work_private_t  * r, int64_t start);
 static hb_buffer_list_t * get_splice_list(hb_work_private_t * r, int id);
 
 /***********************************************************************
@@ -97,7 +94,6 @@ static int hb_reader_open( hb_work_private_t * r )
             // Note, bd seeks always put us to an i-frame.  no need
             // to start decoding early using r->pts_to_start
             hb_bd_seek_pts(r->bd, r->job->pts_to_start);
-            r->duration -= r->job->pts_to_start;
             r->job->pts_to_start = 0;
             r->start_found = 1;
         }
@@ -147,7 +143,6 @@ static int hb_reader_open( hb_work_private_t * r )
                 // first packet we get, subtract that from pts_to_start, and
                 // inspect the reset of the frames in sync.
                 r->start_found = 2;
-                r->duration -= r->job->pts_to_start;
             }
             // hb_stream_seek_ts does nothing for TS streams and will return
             // an error.
@@ -208,29 +203,6 @@ static int reader_init( hb_work_object_t * w, hb_job_t * job )
         // sync.c will drop early frames.
         // Starting a little over 10 seconds early
         r->pts_to_start = MAX(0, job->pts_to_start - 1000000);
-    }
-
-    if (job->pts_to_stop)
-    {
-        r->duration = job->pts_to_start + job->pts_to_stop;
-    }
-    else if (job->frame_to_stop)
-    {
-        int frames = job->frame_to_start + job->frame_to_stop;
-        r->duration = (int64_t)frames * job->title->vrate.den * 90000 /
-                               job->title->vrate.num;
-    }
-    else
-    {
-        hb_chapter_t *chapter;
-        int ii;
-
-        r->duration = 0;
-        for (ii = job->chapter_start; ii < job->chapter_end; ii++)
-        {
-            chapter = hb_list_item( job->title->list_chapter, ii - 1);
-            r->duration += chapter->duration;
-        }
     }
 
     // Count number of splice lists needed for merging buffers
@@ -503,11 +475,6 @@ static int reader_work( hb_work_object_t * w, hb_buffer_t ** buf_in,
             {
                 int64_t start = buf->s.start;
 
-                if (!r->start_found || r->job->indepth_scan)
-                {
-                    UpdateState(r, start);
-                }
-
                 if (r->job->indepth_scan && r->job->pts_to_stop &&
                     start >= r->pts_to_start + r->job->pts_to_stop)
                 {
@@ -588,59 +555,6 @@ static int reader_work( hb_work_object_t * w, hb_buffer_t ** buf_in,
     return HB_WORK_OK;
 }
 
-static void UpdateState( hb_work_private_t  * r, int64_t start)
-{
-    hb_state_t state;
-    uint64_t now;
-    double avg;
-
-    now = hb_get_date();
-    if( !r->st_first )
-    {
-        r->st_first = now;
-    }
-
-    hb_get_state2(r->job->h, &state);
-#define p state.param.working
-    if ( !r->job->indepth_scan )
-    {
-        state.state = HB_STATE_SEARCHING;
-        p.progress  = (float) start / (float) r->job->pts_to_start;
-    }
-    else
-    {
-        state.state = HB_STATE_WORKING;
-        p.progress  = (float) start / (float) r->duration;
-    }
-    if( p.progress > 1.0 )
-    {
-        p.progress = 1.0;
-    }
-    p.rate_cur = 0.0;
-    p.rate_avg = 0.0;
-    if (now > r->st_first)
-    {
-        int eta;
-
-        avg = 1000.0 * (double)start / (now - r->st_first);
-        if ( !r->job->indepth_scan )
-            eta = ( r->job->pts_to_start - start ) / avg;
-        else
-            eta = ( r->duration - start ) / avg;
-        p.hours   = eta / 3600;
-        p.minutes = ( eta % 3600 ) / 60;
-        p.seconds = eta % 60;
-    }
-    else
-    {
-        p.hours    = -1;
-        p.minutes  = -1;
-        p.seconds  = -1;
-    }
-#undef p
-
-    hb_set_state( r->job->h, &state );
-}
 /***********************************************************************
  * GetFifoForId
  ***********************************************************************
