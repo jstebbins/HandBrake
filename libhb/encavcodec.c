@@ -579,7 +579,10 @@ int encavcodecWork( hb_work_object_t * w, hb_buffer_t ** buf_in,
                 buf->s.stop     = buf->s.stop + buf->s.duration;
                 buf->s.flags   &= ~HB_FRAME_REF;
                 buf->s.frametype = convert_pict_type( pv->context->coded_frame->pict_type, pkt.flags & AV_PKT_FLAG_KEY, &buf->s.flags );
-                hb_chapter_dequeue(pv->chapter_queue, buf);
+                if (buf->s.frametype & HB_FRAME_KEY)
+                {
+                    hb_chapter_dequeue(pv->chapter_queue, buf);
+                }
                 buf = process_delay_list( pv, buf );
 
                 hb_buffer_list_append(&list, buf);
