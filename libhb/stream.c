@@ -5880,6 +5880,31 @@ static int ffmpeg_seek_ts( hb_stream_t *stream, int64_t ts )
     int64_t pos;
     int ret;
 
+    // Find the initial chapter we have seeked into
+    int count = hb_list_count(stream->title->list_chapter);
+    if (count > 0)
+    {
+        int64_t        sum_dur = 0;
+        hb_chapter_t * chapter;
+        int            ii;
+        for (ii = 0; ii < count; ii++)
+        {
+            chapter = hb_list_item( stream->title->list_chapter, ii );
+            if (sum_dur + chapter->duration > ts)
+            {
+                break;
+            }
+            sum_dur += chapter->duration;
+        }
+        stream->chapter     = ii;
+        stream->chapter_end = sum_dur;
+    }
+    else
+    {
+        stream->chapter     = 0;
+        stream->chapter_end = INT64_MAX;
+    }
+
     pos = ts * AV_TIME_BASE / 90000 + ffmpeg_initial_timestamp( stream );
     AVStream *st = stream->ffmpeg_ic->streams[stream->ffmpeg_video_id];
     // timebase must be adjusted to match timebase of stream we are
