@@ -1754,19 +1754,18 @@ int hb_stream_seek_chapter( hb_stream_t * stream, int chapter_num )
     // The first chapter does not necessarily start at time 0.
     int64_t        sum_dur = 0;
     hb_chapter_t * chapter;
-    int            i;
-    for ( i = 0; i < chapter_num; ++i)
+    int            ii;
+    for (ii = 0; ii < chapter_num - 1; ii++)
     {
-        chapter = hb_list_item( stream->title->list_chapter, i );
+        chapter = hb_list_item(stream->title->list_chapter, ii);
         sum_dur += chapter->duration;
     }
-    stream->chapter     = 0;
-    // TODO: This should really be set to the start time of the first chapter.
-    stream->chapter_end = 0;
+    stream->chapter     = chapter_num - 1;
+    stream->chapter_end = sum_dur;
 
     if (chapter != NULL && chapter_num > 1)
     {
-        int64_t pos = (((sum_dur - chapter->duration) * AV_TIME_BASE) / 90000) +
+        int64_t pos = ((sum_dur * AV_TIME_BASE) / 90000) +
                       ffmpeg_initial_timestamp(stream);
 
         if (pos > 0)
@@ -1774,7 +1773,7 @@ int hb_stream_seek_chapter( hb_stream_t * stream, int chapter_num )
             hb_deep_log(2,
                         "Seeking to chapter %d: starts %"PRId64", ends %"PRId64
                         ", AV pos %"PRId64,
-                        chapter_num, sum_dur - chapter->duration, sum_dur, pos);
+                        chapter_num, sum_dur, sum_dur + chapter->duration, pos);
 
             AVStream *st = stream->ffmpeg_ic->streams[stream->ffmpeg_video_id];
             // timebase must be adjusted to match timebase of stream we are
@@ -5825,16 +5824,20 @@ hb_buffer_t * hb_ffmpeg_read( hb_stream_t *stream )
     if ( stream->ffmpeg_pkt->stream_index == stream->ffmpeg_video_id &&
          buf->s.start >= stream->chapter_end )
     {
-        stream->chapter++;
         hb_chapter_t *chapter = hb_list_item( stream->title->list_chapter,
-                                              stream->chapter - 1);
+                                              stream->chapter);
         if (chapter != NULL)
         {
+            stream->chapter++;
             stream->chapter_end += chapter->duration;
             hb_deep_log( 2, "ffmpeg_read starting chapter %i at %"PRId64,
                          stream->chapter, buf->s.start);
         } else {
+            // Some titles run longer than the sum of their chapters
+            // Don't increment to a nonexistent chapter number
             // Must have run out of chapters, stop looking.
+            hb_deep_log( 2, "ffmpeg_read end of chapter %i at %"PRId64,
+                         stream->chapter, buf->s.start);
             stream->chapter_end = INT64_MAX;
         }
     }
