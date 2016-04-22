@@ -179,6 +179,7 @@ static void UpdateSearchState( sync_common_t * common, int64_t start,
 static int  UpdateSCR( sync_stream_t * stream, hb_buffer_t * buf );
 static hb_buffer_t * FilterAudioFrame( sync_stream_t * stream,
                                        hb_buffer_t *buf );
+static void SortedQueueBuffer( sync_stream_t * stream, hb_buffer_t * buf );
 
 static int fillQueues( sync_common_t * common )
 {
@@ -1294,15 +1295,16 @@ static void ProcessSCRDelayQueue( sync_common_t * common )
                     buf->s.stop -= stream->pts_slip;
                 }
                 hb_list_rem(stream->scr_delay_queue, buf);
-                hb_list_add(stream->in_queue, buf);
+                SortedQueueBuffer(stream, buf);
             }
             else if (buf->s.scr_sequence < 0)
             {
-                // Unset scr_sequence inidicates an external subtitle (SRT)
-                // that is not on the same timebase as the source tracks.
-                // Do not adjust timestamps for scr_offset in this case.
+                // Unset scr_sequence inidicates an external stream
+                // (e.g. SRT subtitle) that is not on the same timebase
+                // as the source tracks. Do not adjust timestamps for
+                // scr_offset in this case.
                 hb_list_rem(stream->scr_delay_queue, buf);
-                hb_list_add(stream->in_queue, buf);
+                SortedQueueBuffer(stream, buf);
             }
             else
             {
