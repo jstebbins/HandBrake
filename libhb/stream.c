@@ -5823,11 +5823,11 @@ hb_buffer_t * hb_ffmpeg_read( hb_stream_t *stream )
     if ( stream->ffmpeg_pkt->stream_index == stream->ffmpeg_video_id &&
          buf->s.start >= stream->chapter_end )
     {
-        stream->chapter++;
         hb_chapter_t *chapter = hb_list_item( stream->title->list_chapter,
                                               stream->chapter);
         if (chapter != NULL)
         {
+            stream->chapter++;
             stream->chapter_end += chapter->duration;
             buf->s.new_chap = stream->chapter;
             hb_deep_log( 2, "ffmpeg_read starting chapter %i at %"PRId64,
