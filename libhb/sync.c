@@ -2413,20 +2413,11 @@ static void UpdateState( sync_common_t * common, int frame_count )
     hb_job_t          * job = common->job;
     hb_state_t state;
 
-    hb_get_state2(job->h, &state);
     if (frame_count == 0)
     {
         common->st_first = hb_get_date();
         job->st_pause_date = -1;
         job->st_paused = 0;
-    }
-
-    if (job->indepth_scan)
-    {
-        // Progress for indept scan is handled by reader
-        // frame_count is used during indepth_scan
-        // to find start & end points.
-        return;
     }
 
     if (hb_get_date() > common->st_dates[3] + 1000)
@@ -2439,8 +2430,10 @@ static void UpdateState( sync_common_t * common, int frame_count )
         common->st_counts[3] = frame_count;
     }
 
-#define p state.param.working
+    hb_get_state2(job->h, &state);
     state.state = HB_STATE_WORKING;
+
+#define p state.param.working
     p.progress  = (float)frame_count / common->est_frame_count;
     if (p.progress > 1.0)
     {
@@ -2486,18 +2479,10 @@ static void UpdateSearchState( sync_common_t * common, int64_t start,
         job->st_paused = 0;
     }
 
-    if (job->indepth_scan)
-    {
-        // Progress for indept scan is handled by reader
-        // frame_count is used during indepth_scan
-        // to find start & end points.
-        return;
-    }
-
     hb_get_state2(job->h, &state);
+    state.state = HB_STATE_SEARCHING;
 
 #define p state.param.working
-    state.state = HB_STATE_SEARCHING;
     if (job->frame_to_start)
         p.progress  = (float)frame_count / job->frame_to_start;
     else if (job->pts_to_start)
