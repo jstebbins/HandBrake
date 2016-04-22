@@ -196,6 +196,7 @@ static int reader_init( hb_work_object_t * w, hb_job_t * job )
     r->die   = job->die;
 
     r->demux.last_scr = AV_NOPTS_VALUE;
+    r->last_pts       = AV_NOPTS_VALUE;
 
     r->chapter_end = job->chapter_end;
     if ( !job->pts_to_start )
@@ -457,7 +458,10 @@ static int reader_work( hb_work_object_t * w, hb_buffer_t ** buf_in,
             // an offset upon each SCR change that will guarantee this.
             // This is just a very rough SCR offset.  A fine grained
             // offset that maintains proper sync is calculated in sync.c
-            r->scr_offset  = r->last_pts + 90000 - buf->s.start;
+            if (r->last_pts != AV_NOPTS_VALUE)
+            {
+                r->scr_offset  = r->last_pts + 90000 - buf->s.start;
+            }
         }
         // Set the scr sequence that this buffer's timestamps are
         // referenced to.
