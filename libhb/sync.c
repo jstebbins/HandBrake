@@ -147,6 +147,7 @@ struct sync_common_s
 
     // SCR adjustments
     scr_t           scr[SCR_HASH_SZ];
+    int             first_scr;
 
     // point-to-point support
     int             start_found;
@@ -1276,11 +1277,6 @@ static void ProcessSCRDelayQueue( sync_common_t * common )
     for (ii = 0; ii < common->stream_count; ii++)
     {
         sync_stream_t * stream = &common->streams[ii];
-        if (stream->type != SYNC_TYPE_SUBTITLE)
-        {
-            // Only subtitles are delayed due to SCR
-            continue;
-        }
         for (jj = 0; jj < hb_list_count(stream->scr_delay_queue);)
         {
             hb_buffer_t * buf = hb_list_item(stream->scr_delay_queue, jj);
@@ -1316,61 +1312,39 @@ static void ProcessSCRDelayQueue( sync_common_t * common )
     }
 }
 
-static void findLastPts( sync_common_t * common,
-                         double * last_pts, double * last_duration )
-{
-    int ii;
-
-    for (ii = 0; ii < common->stream_count; ii++)
-    {
-        sync_stream_t * stream = &common->streams[ii];
-        if (stream->type == SYNC_TYPE_SUBTITLE)
-        {
-            continue;
-        }
-        if (stream->last_pts != (int64_t)AV_NOPTS_VALUE)
-        {
-            *last_pts      = stream->last_pts;
-            *last_duration = stream->last_duration;
-            return;
-        }
-    }
-    *last_pts      = 0.;
-    *last_duration = 0.;
-}
-
 static int UpdateSCR( sync_stream_t * stream, hb_buffer_t * buf )
 {
     int             hash = buf->s.scr_sequence & SCR_HASH_MASK;
     sync_common_t * common = stream->common;
     double          last_pts, last_duration;
 
-    if (buf->s.scr_sequence != AV_NOPTS_VALUE                 &&
-        buf->s.scr_sequence != common->scr[hash].scr_sequence &&
-        buf->s.start        != AV_NOPTS_VALUE)
+    if (buf->s.scr_sequence != AV_NOPTS_VALUE &&
+        buf->s.scr_sequence != common->scr[hash].scr_sequence)
     {
-        if (stream->type == SYNC_TYPE_SUBTITLE)
+        if (stream->type == SYNC_TYPE_SUBTITLE ||
+            (stream->last_pts == (int64_t)AV_NOPTS_VALUE && common->first_scr))
         {
-            //  We can't compute an scr_offset from subtitles because
-            //  subtiles are not continuous.  i.e. the end of the last
-            //  subtitle does not define the beginning of the next.
-            //  So queue subtitles till a new scr_offset is computed
-            //  for the scr_sequence.
+            // We got a new scr, but we have no last_pts to base it off of.
+            // Delay till we can compute the scr offset from a different stream.
             hb_list_add(stream->scr_delay_queue, buf);
             return 0;
         }
-
-        last_pts      = stream->last_pts;
-        last_duration = stream->last_duration;
-        if (last_pts == (int64_t)AV_NOPTS_VALUE)
+        if (buf->s.start != AV_NOPTS_VALUE)
         {
-            findLastPts(stream->common, &last_pts, &last_duration);
+            last_pts      = stream->last_pts;
+            last_duration = stream->last_duration;
+            if (last_pts == (int64_t)AV_NOPTS_VALUE)
+            {
+                last_pts          = 0.;
+                last_duration     = 0.;
+                common->first_scr = 1;
+            }
+            // New SCR.  Compute SCR offset
+            common->scr[hash].scr_sequence = buf->s.scr_sequence;
+            common->scr[hash].scr_offset   = buf->s.start -
+                                             (last_pts + last_duration);
+            ProcessSCRDelayQueue(common);
         }
-        // New SCR.  Compute SCR offset
-        common->scr[hash].scr_sequence = buf->s.scr_sequence;
-        common->scr[hash].scr_offset   = buf->s.start -
-                                         (last_pts + last_duration);
-        ProcessSCRDelayQueue(common);
     }
 
     // Adjust buffer timestamps for SCR offset
@@ -1551,6 +1525,7 @@ static int InitAudio( sync_common_t * common, int index )
     pv->stream->cond_full   = hb_cond_init();
     if (pv->stream->cond_full == NULL) goto fail;
     pv->stream->in_queue    = hb_list_init();
+    pv->stream->scr_delay_queue = hb_list_init();
     pv->stream->max_len     = SYNC_MAX_AUDIO_QUEUE_LEN;
     pv->stream->min_len     = SYNC_MIN_AUDIO_QUEUE_LEN;
     if (pv->stream->in_queue == NULL) goto fail;
@@ -1735,6 +1710,7 @@ static int syncVideoInit( hb_work_object_t * w, hb_job_t * job)
     pv->stream->cond_full   = hb_cond_init();
     if (pv->stream->cond_full == NULL) goto fail;
     pv->stream->in_queue    = hb_list_init();
+    pv->stream->scr_delay_queue = hb_list_init();
     pv->stream->max_len     = SYNC_MAX_VIDEO_QUEUE_LEN;
     pv->stream->min_len     = SYNC_MIN_VIDEO_QUEUE_LEN;
     if (pv->stream->in_queue == NULL) goto fail;
