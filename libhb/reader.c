@@ -122,6 +122,10 @@ static int hb_reader_open( hb_work_private_t * r )
                         (r->job->seek_points ? (r->job->seek_points + 1.0)
                                              : 11.0));
         }
+        // libdvdnav doesn't have a seek to timestamp function.
+        // So we will have to decode frames until we find the correct time
+        // in sync.c
+        r->start_found = 1;
     }
     else if (r->title->type == HB_STREAM_TYPE ||
              r->title->type == HB_FF_STREAM_TYPE)
@@ -142,10 +146,16 @@ static int hb_reader_open( hb_work_private_t * r )
                 // that we want.  So we will retrieve the start time of the
                 // first packet we get, subtract that from pts_to_start, and
                 // inspect the reset of the frames in sync.
-                r->start_found = 2;
             }
-            // hb_stream_seek_ts does nothing for TS streams and will return
-            // an error.
+            else
+            {
+                // hb_stream_seek_ts does nothing for TS streams and will
+                // return an error.
+                //
+                // So we will decode frames until we find the correct time
+                // in sync.c
+                r->start_found = 1;
+            }
         }
         else
         {
@@ -434,6 +444,10 @@ static int reader_work( hb_work_object_t * w, hb_buffer_t ** buf_in,
             {
                 r->scr_offset  = r->last_pts + 90000 - buf->s.start;
             }
+            else
+            {
+                r->scr_offset  = -buf->s.start;
+            }
         }
         // Set the scr sequence that this buffer's timestamps are
         // referenced to.
@@ -452,8 +466,16 @@ static int reader_work( hb_work_object_t * w, hb_buffer_t ** buf_in,
         }
 
         fifos = GetFifoForId( r, buf->s.id );
-        if (fifos && r->stream && r->start_found == 2 )
+        if (fifos && r->stream && !r->start_found)
         {
+            // libav is allowing SSA subtitles to leak through that are
+            // prior to the seek point.  So only make the adjustment to
+            // pts_to_start after we see the next video buffer.
+            if (buf->s.id != r->job->title->video_id)
+            {
+                hb_buffer_close(&buf);
+                continue;
+            }
             // We will inspect the timestamps of each frame in sync
             // to skip from this seek point to the timestamp we
             // want to start at.
@@ -469,68 +491,9 @@ static int reader_work( hb_work_object_t * w, hb_buffer_t ** buf_in,
             r->start_found = 1;
         }
 
-        if (r->job->indepth_scan || fifos)
-        {
-            if (buf->s.start != AV_NOPTS_VALUE)
-            {
-                int64_t start = buf->s.start;
-
-                if (r->job->indepth_scan && r->job->pts_to_stop &&
-                    start >= r->pts_to_start + r->job->pts_to_stop)
-                {
-                    // sync normally would terminate p-to-p
-                    // but sync doesn't run during indepth scan
-                    hb_log("reader: reached pts %"PRId64", exiting early", start);
-                    reader_send_eof(r);
-                    hb_buffer_list_close(&list);
-                    return HB_WORK_DONE;
-                }
-
-                if (!r->start_found && start >= r->pts_to_start)
-                {
-                    // pts_to_start point found
-                    // Note that this code path only gets executed for
-                    // media where we have not performed an initial seek
-                    // to get close to the start time. So the 'start' time
-                    // is the time since the first frame.
-
-                    if (r->stream)
-                    {
-                        // libav multi-threaded decoders can get into
-                        // a bad state if the initial data is not
-                        // decodable.  So try to improve the chances of
-                        // a good start by waiting for an initial iframe
-                        hb_stream_set_need_keyframe(r->stream, 1);
-                        hb_buffer_close( &buf );
-                        continue;
-                    }
-                    r->start_found = 1;
-                    // sync.c also pays attention to job->pts_to_start
-                    // It eats up the 10 second slack that we build in
-                    // to the start time here in reader (so that video
-                    // decode is clean at the start time).
-                    // sync.c expects pts_to_start to be relative to the
-                    // first timestamp it sees.
-                    if (r->job->pts_to_start > start)
-                    {
-                        r->job->pts_to_start -= start;
-                    }
-                    else
-                    {
-                        r->job->pts_to_start = 0;
-                    }
-                }
-            }
-        }
         buf = splice_discontinuity(r, buf);
         if (fifos && buf != NULL)
         {
-            if (!r->start_found)
-            {
-                hb_buffer_close( &buf );
-                continue;
-            }
-
             /* if there are mutiple output fifos, send a copy of the
              * buffer down all but the first (we have to not ship the
              * original buffer or we'll race with the thread that's
