@@ -1349,7 +1349,7 @@ static void SortedQueueBuffer( sync_stream_t * stream, hb_buffer_t * buf )
     for (ii = count - 2; ii >= 0; ii--)
     {
         buf = hb_list_item(stream->in_queue, ii);
-        if (buf->s.start < start)
+        if (buf->s.start < start || start == AV_NOPTS_VALUE)
         {
             break;
         }
@@ -1383,10 +1383,6 @@ static void SortedQueueBuffer( sync_stream_t * stream, hb_buffer_t * buf )
             prev = buf;
         }
     }
-    else
-    {
-        updateDuration(stream);
-    }
 }
 
 static void QueueBuffer( sync_stream_t * stream, hb_buffer_t * buf )
@@ -1418,6 +1414,7 @@ static void QueueBuffer( sync_stream_t * stream, hb_buffer_t * buf )
             }
 
             SortedQueueBuffer(stream, buf);
+            updateDuration(stream);
         }
     }
     else
@@ -1430,7 +1427,7 @@ static void QueueBuffer( sync_stream_t * stream, hb_buffer_t * buf )
             hb_unlock(stream->common->mutex);
             return;
         }
-        hb_list_add(stream->in_queue, buf);
+        SortedQueueBuffer(stream, buf);
     }
 
     // Make adjustments for gaps found in other streams
