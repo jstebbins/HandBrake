@@ -107,7 +107,10 @@ struct hb_work_private_s
     uint8_t                unfinished;
     reordered_data_t     * reordered_hash[REORDERED_HASH_SZ];
     int64_t                sequence;
+    int                    last_scr_sequence;
+    int                    last_chapter;
     struct SwsContext    * sws_context; // if we have to rescale or convert color space
+
     int                    sws_width;
     int                    sws_height;
     int                    sws_pix_fmt;
@@ -725,8 +728,10 @@ reordered_hash_rem(hb_work_private_t * pv, int64_t sequence)
     reordered = pv->reordered_hash[slot];
     if (reordered == NULL)
     {
-        // This shouldn't happen
-        hb_error("decavcodec: missing sequence %"PRId64"", sequence);
+        // This shouldn't happen...
+        // But, this happens sometimes when libav outputs exactly the same
+        // frame twice for some reason.
+        hb_deep_log(2, "decavcodec: missing sequence %"PRId64"", sequence);
     }
     pv->reordered_hash[slot] = NULL;
     return reordered;
@@ -794,11 +799,18 @@ static hb_buffer_t *copy_frame( hb_work_private_t *pv )
     reordered = reordered_hash_rem(pv, pv->frame->pkt_pts);
     if (reordered != NULL)
     {
-        out->s.scr_sequence = reordered->scr_sequence;
-        out->s.start        = reordered->pts;
-        out->s.new_chap     = reordered->new_chap;
-        pv->frame->pkt_pts  = reordered->pts;
+        out->s.scr_sequence   = reordered->scr_sequence;
+        out->s.start          = reordered->pts;
+        out->s.new_chap       = reordered->new_chap;
+        pv->last_scr_sequence = reordered->scr_sequence;
+        pv->last_chapter      = reordered->new_chap;
         free(reordered);
+    }
+    else
+    {
+        out->s.scr_sequence   = pv->last_scr_sequence;
+        out->s.start          = AV_NOPTS_VALUE;
+        out->s.new_chap       = pv->last_chapter;
     }
 
 #ifdef USE_QSV
