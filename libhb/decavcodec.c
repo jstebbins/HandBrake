@@ -793,10 +793,13 @@ static hb_buffer_t *copy_frame( hb_work_private_t *pv )
         h = pv->job->title->geometry.height;
     }
 
-    reordered_data_t * reordered;
+    reordered_data_t * reordered = NULL;
     hb_buffer_t      * out = hb_video_buffer_init( w, h );
 
-    reordered = reordered_hash_rem(pv, pv->frame->pkt_pts);
+    if (pv->frame->pkt_pts != AV_NOPTS_VALUE)
+    {
+        reordered = reordered_hash_rem(pv, pv->frame->pkt_pts);
+    }
     if (reordered != NULL)
     {
         out->s.scr_sequence   = reordered->scr_sequence;
