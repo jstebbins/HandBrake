@@ -1396,7 +1396,16 @@ static void ProcessSCRDelayQueue( sync_common_t * common )
         {
             hb_buffer_t * buf = hb_list_item(stream->scr_delay_queue, jj);
             int           hash = buf->s.scr_sequence & SCR_HASH_MASK;
-            if (buf->s.scr_sequence == common->scr[hash].scr_sequence)
+            if (buf->s.scr_sequence < 0)
+            {
+                // Unset scr_sequence inidicates an external stream
+                // (e.g. SRT subtitle) that is not on the same timebase
+                // as the source tracks. Do not adjust timestamps for
+                // scr_offset in this case.
+                hb_list_rem(stream->scr_delay_queue, buf);
+                SortedQueueBuffer(stream, buf);
+            }
+            else if (buf->s.scr_sequence == common->scr[hash].scr_sequence)
             {
                 if (buf->s.start != AV_NOPTS_VALUE)
                 {
@@ -1408,15 +1417,6 @@ static void ProcessSCRDelayQueue( sync_common_t * common )
                     buf->s.stop -= common->scr[hash].scr_offset;
                     buf->s.stop -= stream->pts_slip;
                 }
-                hb_list_rem(stream->scr_delay_queue, buf);
-                SortedQueueBuffer(stream, buf);
-            }
-            else if (buf->s.scr_sequence < 0)
-            {
-                // Unset scr_sequence inidicates an external stream
-                // (e.g. SRT subtitle) that is not on the same timebase
-                // as the source tracks. Do not adjust timestamps for
-                // scr_offset in this case.
                 hb_list_rem(stream->scr_delay_queue, buf);
                 SortedQueueBuffer(stream, buf);
             }
@@ -1433,40 +1433,46 @@ static int UpdateSCR( sync_stream_t * stream, hb_buffer_t * buf )
     int             hash = buf->s.scr_sequence & SCR_HASH_MASK;
     sync_common_t * common = stream->common;
     double          last_pts, last_duration;
+    int64_t         scr_offset = 0;
 
-    if (buf->s.scr_sequence != AV_NOPTS_VALUE &&
-        buf->s.scr_sequence != common->scr[hash].scr_sequence)
+    if (buf->s.scr_sequence >= 0)
     {
-        if (stream->type == SYNC_TYPE_SUBTITLE ||
-            (stream->last_pts == (int64_t)AV_NOPTS_VALUE && common->first_scr))
+        if (buf->s.scr_sequence != common->scr[hash].scr_sequence)
         {
-            // We got a new scr, but we have no last_pts to base it off of.
-            // Delay till we can compute the scr offset from a different stream.
-            hb_list_add(stream->scr_delay_queue, buf);
-            return 0;
-        }
-        if (buf->s.start != AV_NOPTS_VALUE)
-        {
-            last_pts      = stream->last_pts;
-            last_duration = stream->last_duration;
-            if (last_pts == (int64_t)AV_NOPTS_VALUE)
+            if (stream->type == SYNC_TYPE_SUBTITLE ||
+                (stream->last_pts == (int64_t)AV_NOPTS_VALUE &&
+                 common->first_scr))
             {
-                last_pts          = 0.;
-                last_duration     = 0.;
-                common->first_scr = 1;
+                // We got a new scr, but we have no last_pts to base it off of.
+                // Delay till we can compute the scr offset from a different
+                // stream.
+                hb_list_add(stream->scr_delay_queue, buf);
+                return 0;
             }
-            // New SCR.  Compute SCR offset
-            common->scr[hash].scr_sequence = buf->s.scr_sequence;
-            common->scr[hash].scr_offset   = buf->s.start -
-                                             (last_pts + last_duration);
-            ProcessSCRDelayQueue(common);
+            if (buf->s.start != AV_NOPTS_VALUE)
+            {
+                last_pts      = stream->last_pts;
+                last_duration = stream->last_duration;
+                if (last_pts == (int64_t)AV_NOPTS_VALUE)
+                {
+                    last_pts          = 0.;
+                    last_duration     = 0.;
+                    common->first_scr = 1;
+                }
+                // New SCR.  Compute SCR offset
+                common->scr[hash].scr_sequence = buf->s.scr_sequence;
+                common->scr[hash].scr_offset   = buf->s.start -
+                                                 (last_pts + last_duration);
+                ProcessSCRDelayQueue(common);
+            }
         }
+        scr_offset = common->scr[hash].scr_offset;
     }
 
     // Adjust buffer timestamps for SCR offset
     if (buf->s.start != AV_NOPTS_VALUE)
     {
-        buf->s.start -= common->scr[hash].scr_offset;
+        buf->s.start -= scr_offset;
         last_pts = buf->s.start;
     }
     else if (stream->last_pts != (int64_t)AV_NOPTS_VALUE)
@@ -1487,7 +1493,7 @@ static int UpdateSCR( sync_stream_t * stream, hb_buffer_t * buf )
     }
     if (buf->s.stop != AV_NOPTS_VALUE)
     {
-        buf->s.stop -= common->scr[hash].scr_offset;
+        buf->s.stop -= scr_offset;
     }
     if (last_pts > stream->last_pts)
     {
