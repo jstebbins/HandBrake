@@ -57,10 +57,10 @@ hb_dvd_func_t hb_dvdnav_func =
  * Local prototypes
  **********************************************************************/
 static void PgcWalkInit( uint32_t pgcn_map[MAX_PGCN/32] );
-static int  FindChapterIndex( hb_list_t * list, int pgcn, int pgn );
-static int  NextPgcn( ifo_handle_t *ifo, int pgcn, uint32_t pgcn_map[MAX_PGCN/32] );
-static int  FindNextCell( pgc_t *pgc, int cell_cur );
-static int  dvdtime2msec( dvd_time_t * );
+static int FindChapterIndex( hb_list_t * list, int pgcn, int pgn );
+static int NextPgcn( ifo_handle_t *ifo, int pgcn, uint32_t pgcn_map[MAX_PGCN/32] );
+static int FindNextCell( pgc_t *pgc, int cell_cur );
+static int dvdtime2msec( dvd_time_t * );
 
 hb_dvd_func_t * hb_dvdnav_methods( void )
 {
@@ -1608,6 +1608,7 @@ static hb_buffer_t * hb_dvdnav_read( hb_dvd_t * e )
 {
     hb_dvdnav_t * d = &(e->dvdnav);
     int result, event, len;
+    int chapter = 0;
     int error_count = 0;
     hb_buffer_t *b = hb_buffer_init( HB_DVD_READ_BUFFER_SIZE );
 
@@ -1645,7 +1646,8 @@ static hb_buffer_t * hb_dvdnav_read( hb_dvd_t * e )
         case DVDNAV_BLOCK_OK:
             // We have received a regular block of the currently playing
             // MPEG stream.
-            b->s.new_chap = d->chapter;
+            b->s.new_chap = chapter;
+            chapter = 0;
             error_count = 0;
             return b;
 
@@ -1761,7 +1763,7 @@ static hb_buffer_t * hb_dvdnav_read( hb_dvd_t * e )
                         hb_deep_log(2, "dvdnav: cell change, previous chapter");
                         return NULL;
                     }
-                    d->chapter = c;
+                    chapter = d->chapter = c;
                 }
                 else if ( cell_event->cellN <= d->cell )
                 {
@@ -1785,7 +1787,7 @@ static hb_buffer_t * hb_dvdnav_read( hb_dvd_t * e )
 
             // mpegdemux expects to get these.  I don't think it does
             // anything useful with them however.
-            b->s.new_chap = d->chapter;
+            b->s.new_chap = chapter;
             return b;
 
             break;

@@ -99,8 +99,12 @@ struct hb_work_private_s
     int                    threads;
     int                    video_codec_opened;
     hb_buffer_list_t       list;
-    double                 duration;   // frame duration (for video)
-    double                 field_duration;   // field duration (for video)
+    double                 duration;        // frame duration (for video)
+    double                 field_duration;  // field duration (for video)
+    int64_t                chap_time;       // time of next chap mark
+    int                    chap_scr;
+    int                    new_chap;        // output chapter mark pending
+    int64_t                last_pts;
     uint32_t               nframes;
     uint32_t               decode_errors;
     packet_info_t          packet_info;
@@ -813,7 +817,20 @@ static hb_buffer_t *copy_frame( hb_work_private_t *pv )
     {
         out->s.scr_sequence   = pv->last_scr_sequence;
         out->s.start          = AV_NOPTS_VALUE;
-        out->s.new_chap       = pv->last_chapter;
+    }
+    if (out->s.new_chap > 0 && out->s.new_chap == pv->new_chap)
+    {
+        pv->new_chap = 0;
+    }
+    // It is possible that the buffer with new_chap gets dropped
+    // by the decoder.  So also check if the output buffer is after
+    // the new_chap in the timeline.
+    if (pv->new_chap > 0 &&
+        (out->s.scr_sequence > pv->chap_scr ||
+         (out->s.scr_sequence == pv->chap_scr && out->s.start > pv->chap_time)))
+    {
+        out->s.new_chap = pv->new_chap;
+        pv->new_chap    = 0;
     }
 
 #ifdef USE_QSV
@@ -1162,6 +1179,24 @@ static void decodeVideo( hb_work_object_t *w, hb_buffer_t * in)
     int      pos, len;
     int64_t  pts = in->s.start;
     int64_t  dts = in->s.renderOffset;
+
+    if (in->s.new_chap > 0)
+    {
+        pv->new_chap = in->s.new_chap;
+        pv->chap_scr = in->s.scr_sequence;
+        if (in->s.start != AV_NOPTS_VALUE)
+        {
+            pv->chap_time = in->s.start;
+        }
+        else
+        {
+            pv->chap_time = pv->last_pts + 1;
+        }
+    }
+    if (in->s.start != AV_NOPTS_VALUE)
+    {
+        pv->last_pts = in->s.start;
+    }
 
     // There are a 3 scenarios that can happen here.
     // 1. The buffer contains exactly one frame of data

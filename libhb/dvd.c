@@ -53,7 +53,7 @@ static hb_dvd_func_t *dvd_methods = &hb_dvdread_func;
  **********************************************************************/
 static void FindNextCell( hb_dvdread_t * );
 static int  dvdtime2msec( dvd_time_t * );
-static void hb_dvdread_set_chapter( hb_dvdread_t * d );
+static int hb_dvdread_is_break( hb_dvdread_t * d );
 
 hb_dvd_func_t * hb_dvdread_methods( void )
 {
@@ -1056,11 +1056,7 @@ static hb_buffer_t * hb_dvdread_read( hb_dvd_t * e )
                 d->cur_vob_id = dsi_pack.dsi_gi.vobu_vob_idn;
                 d->cur_cell_id = dsi_pack.dsi_gi.vobu_c_idn;
 
-                if( d->cell_overlap )
-                {
-                    hb_dvdread_set_chapter( d );
-                    d->cell_overlap = 0;
-                }
+                d->cell_overlap = 0;
             }
         }
 
@@ -1095,9 +1091,12 @@ static hb_buffer_t * hb_dvdread_read( hb_dvd_t * e )
         }
         d->pack_len--;
     }
+    if (b != NULL)
+    {
+        b->s.new_chap = hb_dvdread_is_break( d );
+    }
 
     d->block++;
-    b->s.new_chap = d->chapter;
 
     return b;
 }
@@ -1138,11 +1137,11 @@ static int hb_dvdread_chapter( hb_dvd_t * e )
 }
 
 /***********************************************************************
- * hb_dvdread_set_chapter
+ * hb_dvdread_is_break
  ***********************************************************************
- * Sets chapter number if the current block is a new chapter start
+ * Returns chapter number if the current block is a new chapter start
  **********************************************************************/
-static void hb_dvdread_set_chapter( hb_dvdread_t * d )
+static int hb_dvdread_is_break( hb_dvdread_t * d )
 {
     int     i;
     int     pgc_id, pgn;
@@ -1150,9 +1149,7 @@ static void hb_dvdread_set_chapter( hb_dvdread_t * d )
     pgc_t * pgc;
     int     cell;
 
-    for( i = nr_of_ptts - 1;
-         i > 0;
-         i-- )
+    for (i = nr_of_ptts - 1; i >= 0; i--)
     {
         /* Get pgc for chapter (i+1) */
         pgc_id = d->ifo->vts_ptt_srpt->title[d->ttn-1].ptt[i].pgcn;
@@ -1160,15 +1157,17 @@ static void hb_dvdread_set_chapter( hb_dvdread_t * d )
         pgc    = d->ifo->vts_pgcit->pgci_srp[pgc_id-1].pgc;
         cell   = pgc->program_map[pgn-1] - 1;
 
-        if( cell <= d->cell_start )
+        if( cell < d->cell_start )
             break;
 
         // This must not match against the start cell.
-        if( pgc->cell_playback[cell].first_sector == d->block && cell != d->cell_start )
+        if (pgc->cell_playback[cell].first_sector == d->block)
         {
-            d->chapter = i + 1;
+            return i + 1;
         }
     }
+
+    return 0;
 }
 
 /***********************************************************************

@@ -4564,6 +4564,7 @@ static hb_buffer_t * generate_output_data(hb_stream_t *stream, int curstream)
         buf->s.id = get_id(pes_stream);
         buf->s.type = stream_kind_to_buf_type(pes_stream->stream_kind);
         buf->s.new_chap = b->s.new_chap;
+        b->s.new_chap = 0;
 
         // put the PTS & possible DTS into 'start' & 'renderOffset'
         // only put timestamps on the first output buffer for this PES packet.
@@ -4651,6 +4652,10 @@ hb_buffer_t * hb_ts_decode_pkt( hb_stream_t *stream, const uint8_t * pkt,
 
     hb_buffer_list_clear(&list);
 
+    if (chapter > 0)
+    {
+        stream->chapter = chapter;
+    }
     if (discontinuity)
     {
         // If there is a discontinuity, flush all data
@@ -4885,9 +4890,11 @@ hb_buffer_t * hb_ts_decode_pkt( hb_stream_t *stream, const uint8_t * pkt,
     // Add the payload for this packet to the current buffer
     hb_ts_stream_append_pkt(stream, curstream, pkt + 4 + adapt_len,
                             184 - adapt_len);
-    if (stream->pes.list[ts_stream->pes_list].stream_kind == V)
+    if (stream->chapter > 0 &&
+        stream->pes.list[ts_stream->pes_list].stream_kind == V)
     {
-        ts_stream->buf->s.new_chap = chapter;
+        ts_stream->buf->s.new_chap = stream->chapter;
+        stream->chapter = 0;
     }
 
     if (!ts_stream->pes_info_valid && ts_stream->buf->size >= 19)
@@ -5830,6 +5837,7 @@ hb_buffer_t * hb_ffmpeg_read( hb_stream_t *stream )
         {
             stream->chapter++;
             stream->chapter_end += chapter->duration;
+            buf->s.new_chap = stream->chapter;
             hb_deep_log( 2, "ffmpeg_read starting chapter %i at %"PRId64,
                          stream->chapter, buf->s.start);
         } else {
@@ -5839,9 +5847,11 @@ hb_buffer_t * hb_ffmpeg_read( hb_stream_t *stream )
             hb_deep_log( 2, "ffmpeg_read end of chapter %i at %"PRId64,
                          stream->chapter, buf->s.start);
             stream->chapter_end = INT64_MAX;
+            buf->s.new_chap = 0;
         }
+    } else {
+        buf->s.new_chap = 0;
     }
-    buf->s.new_chap = stream->chapter;
     av_free_packet( stream->ffmpeg_pkt );
     return buf;
 }
