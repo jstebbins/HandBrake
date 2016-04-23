@@ -57,10 +57,10 @@ hb_dvd_func_t hb_dvdnav_func =
  * Local prototypes
  **********************************************************************/
 static void PgcWalkInit( uint32_t pgcn_map[MAX_PGCN/32] );
-static int  FindChapterIndex( hb_list_t * list, int pgcn, int pgn );
-static int  NextPgcn( ifo_handle_t *ifo, int pgcn, uint32_t pgcn_map[MAX_PGCN/32] );
-static int  FindNextCell( pgc_t *pgc, int cell_cur );
-static int  dvdtime2msec( dvd_time_t * );
+static int FindChapterIndex( hb_list_t * list, int pgcn, int pgn );
+static int NextPgcn( ifo_handle_t *ifo, int pgcn, uint32_t pgcn_map[MAX_PGCN/32] );
+static int FindNextCell( pgc_t *pgc, int cell_cur );
+static int dvdtime2msec( dvd_time_t * );
 
 hb_dvd_func_t * hb_dvdnav_methods( void )
 {
@@ -1763,7 +1763,7 @@ static hb_buffer_t * hb_dvdnav_read( hb_dvd_t * e )
                         hb_deep_log(2, "dvdnav: cell change, previous chapter");
                         return NULL;
                     }
-                    d->chapter = c;
+                    chapter = d->chapter = c;
                 }
                 else if ( cell_event->cellN <= d->cell )
                 {
