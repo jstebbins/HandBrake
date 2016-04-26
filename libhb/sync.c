@@ -2013,10 +2013,116 @@ static void setSubDuration(hb_buffer_t * buf)
         buf->s.duration = (int64_t)AV_NOPTS_VALUE;
 }
 
+// Find all subtitles in the list that start "now" and overlap for
+// some period of time.  Create a new subtitle buffer that is the
+// merged results of the overlapping parts and update start times
+// of non-overlapping parts.
+static int mergeSubtitleOverlaps(subtitle_sanitizer_t *sanitizer)
+{
+    hb_buffer_t  * split_buf    = NULL;
+    hb_buffer_t  * unmerged_buf = NULL;
+    hb_buffer_t  * merged_buf   = NULL;
+    hb_buffer_t ** next = &unmerged_buf;
+    hb_buffer_t  * a, * b;
+
+    a = hb_buffer_list_head(&sanitizer->list_current);
+    if (a == NULL ||
+        a->s.start == AV_NOPTS_VALUE || a->s.stop == AV_NOPTS_VALUE)
+    {
+        // Not enough information to resolve an overlap
+        return -1;
+    }
+    b = a->next;
+    if (b != NULL &&
+        (a->s.stop <= b->s.start || (b->s.flags & HB_BUF_FLAG_EOF)))
+    {
+        // No overlap
+        return 0;
+    }
+
+    // Check that we have 2 non-overlapping buffers in the list
+    // and that all timestamps are valid up to the non-overlap.
+    // This ensures that multiple overlapping subtitles have been
+    // completely merged.
+    while (b != NULL &&
+           b->s.start < a->s.stop && !(b->s.flags & HB_BUF_FLAG_EOF))
+    {
+        if (b->s.start == AV_NOPTS_VALUE || b->s.stop == AV_NOPTS_VALUE)
+        {
+            // Not enough information to resolve an overlap
+            return -1;
+        }
+        b = b->next;
+    }
+    if (b == NULL)
+    {
+        // Not enough information to resolve an overlap
+        return -1;
+    }
+
+    // If we get here, there is an overlap and we can resolve it.
+    // remove a from list
+    a = hb_buffer_list_rem_head(&sanitizer->list_current);
+    b = hb_buffer_list_head(&sanitizer->list_current);
+    if (b->s.start - a->s.start > 18000)
+    {
+        // a starts before b and they overlap.  split a.
+        split_buf         = hb_buffer_dup(a);
+        split_buf->s.stop = b->s.start;
+        a->s.start        = b->s.start;
+    }
+    while (a->s.stop > b->s.start && ABS(a->s.start - b->s.start) <= 18000)
+    {
+        // subtitles start within 1/5 second of eachother, merge
+        // remove b from list
+        hb_buffer_list_rem_head(&sanitizer->list_current);
+
+        b->s.start = a->s.start;
+        if (b->s.stop < a->s.stop)
+        {
+            // The overlapping part ends at b->s.stop
+            // consume b
+            merged_buf = merge_ssa(a, b);
+            merged_buf->s.stop = b->s.stop;
+            hb_buffer_close(&b);
+            b = a;
+        }
+        else
+        {
+            // The overlapping part ends at a->s.stop
+            // consume a
+            merged_buf = merge_ssa(a, b);
+            merged_buf->s.stop = a->s.stop;
+            hb_buffer_close(&a);
+        }
+        b->s.start = merged_buf->s.stop;
+        a = merged_buf;
+
+        if (ABS(b->s.stop - b->s.start) <= 18000)
+        {
+            // a and b completely overlap, remove b
+            hb_buffer_close(&b);
+        }
+        else
+        {
+            // Keep a list of the unmerged parts
+            // to be added back to sanitizer list after merge complete
+            *next = b;
+            next = &(*next)->next;
+        }
+        b = hb_buffer_list_head(&sanitizer->list_current);
+    }
+    hb_buffer_list_insert_sort(&sanitizer->list_current, unmerged_buf);
+    hb_buffer_list_prepend(&sanitizer->list_current, merged_buf);
+    hb_buffer_list_prepend(&sanitizer->list_current, split_buf);
+
+    return merged_buf != NULL;
+}
+
 static hb_buffer_t * mergeSubtitles(subtitle_sanitizer_t *sanitizer)
 {
-    hb_buffer_t *a, *b, *buf;
-    hb_buffer_list_t list;
+    hb_buffer_t      * buf;
+    hb_buffer_list_t   list;
 
     hb_buffer_list_clear(&list);
 
@@ -2051,86 +2157,29 @@ static hb_buffer_t * mergeSubtitles(subtitle_sanitizer_t *sanitizer)
     // We only reach here if we are merging subtitles
     while (hb_buffer_list_count(&sanitizer->list_current) > 0)
     {
-        a = hb_buffer_list_head(&sanitizer->list_current);
-        if (a->s.flags & HB_BUF_FLAG_EOF)
+        buf = hb_buffer_list_head(&sanitizer->list_current);
+        if (buf->s.flags & HB_BUF_FLAG_EOF)
         {
-            buf = hb_buffer_list_rem_head(&sanitizer->list_current);
-            hb_buffer_list_append(&list, buf);
-            break;
-        }
-        b = a->next;
-        if (b == NULL)
-        {
-            break;
-        }
-        if (b->s.flags & HB_BUF_FLAG_EOF)
-        {
-            buf = hb_buffer_list_rem_head(&sanitizer->list_current);
-            setSubDuration(buf);
-            hb_buffer_list_append(&list, buf);
+            // remove EOF from list, add to output
             buf = hb_buffer_list_rem_head(&sanitizer->list_current);
             hb_buffer_list_append(&list, buf);
             break;
         }
 
-        if (a->s.stop == AV_NOPTS_VALUE)
+        int result = mergeSubtitleOverlaps(sanitizer);
+        if (result < 0)
         {
-            // To evaluate overlaps, we need the stop times
-            // This should really never happen...
+            // not enough information available yet to resolve the overlap
             break;
         }
-
-        buf = NULL;
-        if (a->s.stop > b->s.start)
+        else if (result)
         {
-            // Overlap
-            if (ABS(a->s.start - b->s.start) <= 18000)
-            {
-                if (b->s.stop == AV_NOPTS_VALUE)
-                {
-                    // To evaluate overlaps, we need the stop times
-                    // for a and b
-                    break;
-                }
-                a = hb_buffer_list_rem_head(&sanitizer->list_current);
-
-                // subtitles start within 1/5 second of eachother, merge
-                if (a->s.stop > b->s.stop && b->s.stop != AV_NOPTS_VALUE)
-                {
-                    // a continues after b, reorder the list and swap
-                    b = a;
-                    a = hb_buffer_list_rem_head(&sanitizer->list_current);
-                    hb_buffer_list_prepend(&sanitizer->list_current, b);
-                }
-
-                b->s.start = a->s.stop;
-
-                buf = merge_ssa(a, b);
-                hb_buffer_close(&a);
-                a = buf;
-
-                if (b->s.stop != AV_NOPTS_VALUE &&
-                    ABS(b->s.stop - b->s.start) <= 18000)
-                {
-                    // b and a completely overlap, remove b
-                    b = hb_buffer_list_rem_head(&sanitizer->list_current);
-                    hb_buffer_close(&b);
-                }
-            }
-            else
-            {
-                // a starts before b, output copy of a and update a start
-                buf = hb_buffer_dup(a);
-                buf->s.stop = b->s.start;
-                a->s.start = b->s.start;
-            }
-        }
-        else if (a->s.stop <= b->s.start)
-        {
-            // a starts and ends before b
-            buf = hb_buffer_list_rem_head(&sanitizer->list_current);
+            // Overlap found and merged, start again.
+            continue;
         }
 
+        // No overlap detected, output a buffer
+        buf = hb_buffer_list_rem_head(&sanitizer->list_current);
         if (buf != NULL)
         {
             setSubDuration(buf);
