@@ -151,6 +151,7 @@ struct sync_common_s
 
     // point-to-point support
     int             start_found;
+    int64_t         start_pts;
 
     // sync audio work objects
     hb_list_t     * list_work;
@@ -1121,7 +1122,14 @@ static void OutputBuffer( sync_common_t * common )
             // and overlaps.
             if (hb_list_count(stream->in_queue) > stream->min_len)
             {
-                buf = hb_list_item(stream->in_queue, 0);
+                if (!common->start_found)
+                {
+                    // If we have not yet found the start point for
+                    // p-to-p, grab the first stream that has data
+                    // above min_len.
+                    out_stream = stream;
+                    break;
+                }
                 if (stream->type == SYNC_TYPE_SUBTITLE)
                 {
                     // Forward subtitles immediately instead of interleaving.
@@ -1136,6 +1144,7 @@ static void OutputBuffer( sync_common_t * common )
                     out_stream = stream;
                     break;
                 }
+                buf = hb_list_item(stream->in_queue, 0);
                 if (buf->s.start < pts)
                 {
                     pts = buf->s.start;
@@ -1180,20 +1189,26 @@ static void OutputBuffer( sync_common_t * common )
         {
             // pts_to_start or frame_to_start were specified.
             // Wait for the appropriate start point.
-            if (out_stream->type == SYNC_TYPE_VIDEO &&
-                common->job->frame_to_start > 0 &&
-                out_stream->frame_count >= common->job->frame_to_start)
+            if (common->job->frame_to_start > 0 &&
+                out_stream->type == SYNC_TYPE_VIDEO)
             {
-                common->start_found = 1;
-                out_stream->frame_count = 0;
+                common->start_pts = buf->s.start + 1;
+                if (out_stream->frame_count >= common->job->frame_to_start)
+                {
+                    common->start_found = 1;
+                    out_stream->frame_count = 0;
+                }
             }
-            else if (common->job->pts_to_start > 0 &&
-                     buf->s.start >= common->job->pts_to_start)
+            if (common->job->pts_to_start > 0 &&
+                out_stream->type != SYNC_TYPE_SUBTITLE)
             {
-                common->start_found = 1;
-                common->streams[0].frame_count = 0;
+                if (buf->s.start >= common->job->pts_to_start)
+                {
+                    common->start_found = 1;
+                    common->streams[0].frame_count = 0;
+                }
             }
-            else
+            if (!common->start_found)
             {
                 if (out_stream->type == SYNC_TYPE_VIDEO)
                 {
@@ -1201,9 +1216,12 @@ static void OutputBuffer( sync_common_t * common )
                                       out_stream->frame_count);
                     out_stream->frame_count++;
                 }
-                hb_list_rem(out_stream->in_queue, buf);
+                if (buf->s.start < common->start_pts)
+                {
+                    hb_list_rem(out_stream->in_queue, buf);
+                    hb_buffer_close(&buf);
+                }
                 signalBuffer(out_stream);
-                hb_buffer_close(&buf);
                 continue;
             }
             // reset frame count to track number of frames after
@@ -1938,6 +1956,7 @@ static int syncVideoInit( hb_work_object_t * w, hb_job_t * job)
     if (job->frame_to_start || job->pts_to_start)
     {
         pv->common->start_found = 0;
+        pv->common->start_pts = pv->common->job->pts_to_start;
     }
     else
     {
