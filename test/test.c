@@ -887,6 +887,7 @@ static int HandleEvents(hb_handle_t * h, hb_dict_t *preset_dict)
             break;
 
         case HB_STATE_WORKING:
+#if 0
             fprintf( stdout, "\rEncoding: task %d of %d, %.2f %%",
                      p.pass, p.pass_count, 100.0 * p.progress );
             if( p.seconds > -1 )
@@ -896,6 +897,7 @@ static int HandleEvents(hb_handle_t * h, hb_dict_t *preset_dict)
                          p.hours, p.minutes, p.seconds );
             }
             fflush(stdout);
+#endif
             break;
 #undef p
 

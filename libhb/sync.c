@@ -1514,6 +1514,14 @@ static void QueueBuffer( sync_stream_t * stream, hb_buffer_t * buf )
         hb_cond_wait(stream->cond_full, stream->common->mutex);
     }
 
+    if (stream->type == SYNC_TYPE_SUBTITLE)
+    {
+        hb_log("sync subtitle: buf %p scr %d start %"PRId64" stop %"PRId64
+               " renderOffset %"PRId64" duration %f",
+               buf, buf->s.scr_sequence, buf->s.start, buf->s.stop,
+               buf->s.renderOffset, buf->s.duration);
+    }
+
     // Render offset is only useful for decoders, which are all
     // upstream of sync.  Squash it.
     buf->s.renderOffset = AV_NOPTS_VALUE;

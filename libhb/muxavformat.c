@@ -1187,6 +1187,13 @@ static int avformatMux(hb_mux_object_t *m, hb_mux_data_t *track, hb_buffer_t *bu
                     empty_pkt.duration = pts - track->duration;
                     empty_pkt.convergence_duration = empty_pkt.duration;
                     empty_pkt.stream_index = track->st->index;
+
+                    hb_log("mux empty subtitle: PTS %"PRId64" DTS %"PRId64
+                           " pkt duration %d"
+                           " track duration %"PRId64"",
+                           empty_pkt.pts, empty_pkt.dts, empty_pkt.duration,
+                           track->duration);
+
                     int ret = av_interleaved_write_frame(m->oc, &empty_pkt);
                     if (ret < 0)
                     {
@@ -1277,6 +1284,17 @@ static int avformatMux(hb_mux_object_t *m, hb_mux_data_t *track, hb_buffer_t *bu
     }
 
     pkt.stream_index = track->st->index;
+
+    if (track->type == MUX_TYPE_SUBTITLE)
+    {
+        hb_log("mux subtitle: PTS %"PRId64" DTS %"PRId64
+               " pkt duration %d"
+               " track duration %"PRId64
+               " buf %p start %"PRId64" renderOffset %"PRId64" duration %f",
+               pkt.pts, pkt.dts, pkt.duration, track->duration,
+               buf, buf->s.start, buf->s.renderOffset, buf->s.duration);
+    }
+
     int ret = av_interleaved_write_frame(m->oc, &pkt);
     // Many avformat muxer functions do not check the error status
     // of the AVIOContext.  So we need to check it ourselves to detect
