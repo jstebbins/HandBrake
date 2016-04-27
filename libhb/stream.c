@@ -15,7 +15,6 @@
 #include "hbffmpeg.h"
 #include "lang.h"
 #include "libbluray/bluray.h"
-#include "vadxva2.h"
 
 #define min(a, b) a < b ? a : b
 #define HB_MAX_PROBE_SIZE (1*1024*1024)
