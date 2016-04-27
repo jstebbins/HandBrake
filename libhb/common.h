@@ -116,11 +116,11 @@ struct hb_buffer_list_s
 
 void hb_buffer_list_append(hb_buffer_list_t *list, hb_buffer_t *buf);
 void hb_buffer_list_prepend(hb_buffer_list_t *list, hb_buffer_t *buf);
-void hb_buffer_list_insert_sort(hb_buffer_list_t *list, hb_buffer_t *buf);
 hb_buffer_t* hb_buffer_list_head(hb_buffer_list_t *list);
 hb_buffer_t* hb_buffer_list_rem_head(hb_buffer_list_t *list);
 hb_buffer_t* hb_buffer_list_tail(hb_buffer_list_t *list);
 hb_buffer_t* hb_buffer_list_rem_tail(hb_buffer_list_t *list);
+hb_buffer_t* hb_buffer_list_rem(hb_buffer_list_t *list, hb_buffer_t * b);
 hb_buffer_t* hb_buffer_list_clear(hb_buffer_list_t *list);
 hb_buffer_t* hb_buffer_list_set(hb_buffer_list_t *list, hb_buffer_t *buf);
 void hb_buffer_list_close(hb_buffer_list_t *list);

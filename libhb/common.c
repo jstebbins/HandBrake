@@ -2735,43 +2735,6 @@ void hb_buffer_list_prepend(hb_buffer_list_t *list, hb_buffer_t *buf)
     list->size += size;
 }
 
-void hb_buffer_list_insert_sort(hb_buffer_list_t *list, hb_buffer_t *buf)
-{
-    while (buf != NULL)
-    {
-        hb_buffer_t * pos, * prev = NULL;
-        hb_buffer_t * next = buf->next;
-
-        buf->next = NULL;
-
-        pos = list->head;
-        while (pos != NULL && pos->s.start < buf->s.start)
-        {
-            prev = pos;
-            pos = pos->next;
-        }
-        if (prev == NULL)
-        {
-            hb_buffer_list_prepend(list, buf);
-            buf = next;
-            continue;
-        }
-        if (pos == NULL)
-        {
-            hb_buffer_list_append(list, buf);
-            buf = next;
-            continue;
-        }
-        prev->next = buf;
-        buf->next = pos;
-
-        list->size += buf->size;
-        list->count++;
-
-        buf = next;
-    }
-}
-
 hb_buffer_t* hb_buffer_list_rem_head(hb_buffer_list_t *list)
 {
     if (list == NULL)
@@ -2827,6 +2790,40 @@ hb_buffer_t* hb_buffer_list_rem_tail(hb_buffer_list_t *list)
         tail->next = NULL;
     }
     return tail;
+}
+
+hb_buffer_t* hb_buffer_list_rem(hb_buffer_list_t *list, hb_buffer_t * b)
+{
+    hb_buffer_t * a;
+
+    if (list == NULL)
+    {
+        return NULL;
+    }
+    if (b == list->head)
+    {
+        return hb_buffer_list_rem_head(list);
+    }
+    a = list->head;
+    while (a != NULL && a->next != b)
+    {
+        a = a->next;
+    }
+    if (a == NULL)
+    {
+        // Buffer is not in the list
+        return NULL;
+    }
+    list->count--;
+    list->size -= b->size;
+    a->next = b->next;
+    if (list->tail == b)
+    {
+        list->tail = a;
+    }
+    b->next = NULL;
+
+    return b;
 }
 
 hb_buffer_t* hb_buffer_list_head(hb_buffer_list_t *list)
