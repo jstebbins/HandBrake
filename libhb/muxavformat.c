@@ -1188,11 +1188,13 @@ static int avformatMux(hb_mux_object_t *m, hb_mux_data_t *track, hb_buffer_t *bu
                     empty_pkt.convergence_duration = empty_pkt.duration;
                     empty_pkt.stream_index = track->st->index;
 
+#if 0
                     hb_log("mux empty subtitle: PTS %"PRId64" DTS %"PRId64
                            " pkt duration %d"
                            " track duration %"PRId64"",
                            empty_pkt.pts, empty_pkt.dts, empty_pkt.duration,
                            track->duration);
+#endif
 
                     int ret = av_interleaved_write_frame(m->oc, &empty_pkt);
                     if (ret < 0)
@@ -1290,9 +1292,9 @@ static int avformatMux(hb_mux_object_t *m, hb_mux_data_t *track, hb_buffer_t *bu
         hb_log("mux subtitle: PTS %"PRId64" DTS %"PRId64
                " pkt duration %d"
                " track duration %"PRId64
-               " buf %p start %"PRId64" renderOffset %"PRId64" duration %f",
+               " buf %p start %"PRId64" duration %f",
                pkt.pts, pkt.dts, pkt.duration, track->duration,
-               buf, buf->s.start, buf->s.renderOffset, buf->s.duration);
+               buf, buf->s.start, buf->s.duration);
     }
 
     int ret = av_interleaved_write_frame(m->oc, &pkt);

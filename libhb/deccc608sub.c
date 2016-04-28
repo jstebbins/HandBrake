@@ -949,6 +949,7 @@ static int write_cc_buffer_as_ssa(struct eia608_screen *data,
         sprintf((char*)buffer->data, "%d,,Default,,0,0,0,,", ++wb->line);
         len = strlen((char*)buffer->data);
         memcpy(buffer->data + len, wb->enc_buffer, wb->enc_buffer_used);
+        hb_log("CC: buf %p, %s", buffer, buffer->data);
         hb_buffer_list_append(&wb->list, buffer);
         wrote_something=1;
         wb->clear_sub_needed = 1;
@@ -979,6 +980,8 @@ static int write_cc_buffer(struct s_write *wb)
     data = get_current_visible_buffer(wb);
     if (!data->dirty)
         return 0;
+    hb_log("start_ms %"PRId64" last_pts %"PRId64"",
+            wb->data608->current_visible_start_ms, wb->last_pts);
     wb->new_sentence=1;
     wrote_something = write_cc_buffer_as_ssa(data, wb);
     data->dirty = 0;
@@ -1250,6 +1253,7 @@ static void handle_command(unsigned char c1, const unsigned char c2,
             }
             if (wb->data608->mode==MODE_POPUP)
             {
+                hb_log("rollup2");
                 swap_visible_buffer(wb);
                 if (write_cc_buffer(wb))
                     wb->data608->screenfuls_counter++;
@@ -1279,6 +1283,7 @@ static void handle_command(unsigned char c1, const unsigned char c2,
             }
             if (wb->data608->mode==MODE_POPUP)
             {
+                hb_log("rollup3");
                 if (write_cc_buffer(wb))
                     wb->data608->screenfuls_counter++;
                 erase_memory (wb, 1);
@@ -1307,6 +1312,7 @@ static void handle_command(unsigned char c1, const unsigned char c2,
             }
             if (wb->data608->mode==MODE_POPUP)
             {
+                hb_log("rollup4");
                 if (write_cc_buffer(wb))
                     wb->data608->screenfuls_counter++;
                 erase_memory (wb, 1);
@@ -1339,6 +1345,7 @@ static void handle_command(unsigned char c1, const unsigned char c2,
                 wb->data608->current_visible_scr_sequence = wb->last_scr_sequence;
                 break;
             }
+            hb_log("carriagereturn");
             if (write_cc_buffer(wb))
                 wb->data608->screenfuls_counter++;
             roll_up(wb);
@@ -1356,6 +1363,7 @@ static void handle_command(unsigned char c1, const unsigned char c2,
                 wb->data608->mode == MODE_ROLLUP_3 ||
                 wb->data608->mode == MODE_ROLLUP_4)
             {
+                hb_log("erasedisplay rollup");
                 write_cc_buffer(wb);
             }
             erase_memory (wb,1);
@@ -1369,6 +1377,7 @@ static void handle_command(unsigned char c1, const unsigned char c2,
             struct eia608_screen *data;
             data = get_current_visible_buffer(wb);
             data->dirty = 1;
+            hb_log("erasedisplay");
             write_cc_buffer(wb);
             break;
         case COM_ENDOFCAPTION: // Switch buffers
@@ -1380,6 +1389,7 @@ static void handle_command(unsigned char c1, const unsigned char c2,
                 wb->data608->current_visible_start_ms = wb->last_pts;
                 wb->data608->current_visible_scr_sequence = wb->last_scr_sequence;
             }
+            hb_log("endofcaption");
             if (write_cc_buffer(wb))
                 wb->data608->screenfuls_counter++;
 
