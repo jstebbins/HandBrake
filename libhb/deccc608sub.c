@@ -1236,11 +1236,13 @@ static void handle_command(unsigned char c1, const unsigned char c2,
                 wb->data608->cursor_column=31;
             break;
         case COM_RESUMECAPTIONLOADING:
+            hb_log("resumecaption");
             wb->data608->mode=MODE_POPUP;
             wb->data608->current_visible_start_ms = wb->last_pts;
             wb->data608->current_visible_scr_sequence = wb->last_scr_sequence;
             break;
         case COM_RESUMETEXTDISPLAY:
+            hb_log("resumetext");
             wb->data608->mode=MODE_TEXT;
             wb->data608->current_visible_start_ms = wb->last_pts;
             wb->data608->current_visible_scr_sequence = wb->last_scr_sequence;
@@ -1268,6 +1270,7 @@ static void handle_command(unsigned char c1, const unsigned char c2,
                 handle_command(0x14, 0x2D, wb);
                 wb->rollup_cr = 1;
             }
+            hb_log("rollup2 start_ms");
             wb->data608->current_visible_start_ms = wb->last_pts;
             wb->data608->current_visible_scr_sequence = wb->last_scr_sequence;
             wb->data608->mode=MODE_ROLLUP_2;
@@ -1297,6 +1300,7 @@ static void handle_command(unsigned char c1, const unsigned char c2,
                 handle_command(0x14, 0x2D, wb);
                 wb->rollup_cr = 1;
             }
+            hb_log("rollup3 start_ms");
             wb->data608->current_visible_start_ms = wb->last_pts;
             wb->data608->current_visible_scr_sequence = wb->last_scr_sequence;
             wb->data608->mode=MODE_ROLLUP_3;
@@ -1326,6 +1330,7 @@ static void handle_command(unsigned char c1, const unsigned char c2,
                 handle_command(0x14, 0x2D, wb);
                 wb->rollup_cr = 1;
             }
+            hb_log("rollup4 start_ms");
             wb->data608->current_visible_start_ms = wb->last_pts;
             wb->data608->current_visible_scr_sequence = wb->last_scr_sequence;
             wb->data608->mode = MODE_ROLLUP_4;
@@ -1341,6 +1346,7 @@ static void handle_command(unsigned char c1, const unsigned char c2,
             if (wb->rollup_cr && is_current_row_empty(wb))
             {
                 wb->rollup_cr = 0;
+                hb_log("CR start_ms");
                 wb->data608->current_visible_start_ms = wb->last_pts;
                 wb->data608->current_visible_scr_sequence = wb->last_scr_sequence;
                 break;
@@ -1350,6 +1356,7 @@ static void handle_command(unsigned char c1, const unsigned char c2,
                 wb->data608->screenfuls_counter++;
             roll_up(wb);
             wb->data608->cursor_column = 0;
+            hb_log("CR start_ms");
             wb->data608->current_visible_start_ms = wb->last_pts;
             wb->data608->current_visible_scr_sequence = wb->last_scr_sequence;
             break;
@@ -1370,6 +1377,7 @@ static void handle_command(unsigned char c1, const unsigned char c2,
 
             // the last pts is the time to remove the previously 
             // displayed CC from the display
+            hb_log("erasedisplay start_ms");
             wb->data608->current_visible_start_ms = wb->last_pts;
             wb->data608->current_visible_scr_sequence = wb->last_scr_sequence;
 
@@ -1386,6 +1394,7 @@ static void handle_command(unsigned char c1, const unsigned char c2,
             if (wb->data608->mode == MODE_POPUP)
             {
                 swap_visible_buffer(wb);
+                hb_log("endofcaption start_ms");
                 wb->data608->current_visible_start_ms = wb->last_pts;
                 wb->data608->current_visible_scr_sequence = wb->last_scr_sequence;
             }
@@ -1833,6 +1842,7 @@ static int decccWork( hb_work_object_t * w, hb_buffer_t ** buf_in,
         return HB_WORK_DONE;
     }
 
+    hb_log("buffer in start %"PRId64"", in->s.start);
     pv->cc608->last_pts = in->s.start;
     pv->cc608->last_scr_sequence = in->s.scr_sequence;
     process608(in->data, in->size, pv->cc608);
