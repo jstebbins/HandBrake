@@ -873,6 +873,11 @@ static void streamFlush( sync_stream_t * stream )
             if (stream->type == SYNC_TYPE_AUDIO)
             {
                 buf = FilterAudioFrame(stream, buf);
+                if (buf == NULL)
+                {
+                    // FilterAudioFrame can conume the buffer with no output
+                    continue;
+                }
             }
             if (stream->type == SYNC_TYPE_AUDIO ||
                 stream->type == SYNC_TYPE_VIDEO)
@@ -1251,6 +1256,11 @@ static void OutputBuffer( sync_common_t * common )
             if (out_stream->type == SYNC_TYPE_AUDIO)
             {
                 buf = FilterAudioFrame(out_stream, buf);
+                if (buf == NULL)
+                {
+                    // FilterAudioFrame can conume the buffer with no output
+                    continue;
+                }
             }
             if (out_stream->type == SYNC_TYPE_AUDIO ||
                 out_stream->type == SYNC_TYPE_VIDEO)
@@ -2549,6 +2559,8 @@ static hb_buffer_t * FilterAudioFrame( sync_stream_t * stream,
             }
             buf->s.duration = 90000. * stream->audio.src.pkt.output_frames_gen /
                               audio->config.out.samplerate;
+            buf->s.start = stream->next_pts;
+            buf->s.stop = stream->next_pts + buf->s.duration;
         }
         if (audio->config.out.gain > 0.0)
         {
