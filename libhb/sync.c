@@ -755,6 +755,28 @@ static void fixAudioOverlap( sync_stream_t * stream )
     }
 }
 
+static void fixSubtitleOverlap( sync_stream_t * stream )
+{
+    hb_buffer_t * buf;
+
+    buf = hb_list_item(stream->in_queue, 0);
+    if (buf == NULL || buf->s.start == buf->s.stop)
+    {
+        // start == stop is used as a marker to indicate the end of a subtitle
+        return;
+    }
+    if (buf->s.start <= stream->next_pts)
+    {
+        int64_t       overlap;
+        overlap = stream->next_pts - buf->s.start;
+        hb_log("sync: subtitle 0x%x time went backwards %d ms, PTS %"PRId64"",
+               stream->subtitle.subtitle->id, (int)overlap / 90,
+               buf->s.start);
+        hb_list_rem(stream->in_queue, buf);
+        hb_buffer_close(&buf);
+    }
+}
+
 static void fixStreamTimestamps( sync_stream_t * stream )
 {
     // Fix gaps and overlaps in queue
@@ -768,6 +790,10 @@ static void fixStreamTimestamps( sync_stream_t * stream )
     {
         dejitterVideo(stream);
         fixVideoOverlap(stream);
+    }
+    else if (stream->type == SYNC_TYPE_SUBTITLE)
+    {
+        fixSubtitleOverlap(stream);
     }
 }
 
@@ -838,7 +864,10 @@ static void streamFlush( sync_stream_t * stream )
                 }
                 stream->first_frame = 1;
                 stream->first_pts = buf->s.start;
-                stream->next_pts  = buf->s.start;
+                if (stream->type != SYNC_TYPE_SUBTITLE)
+                {
+                    stream->next_pts  = buf->s.start;
+                }
                 stream->min_frame_duration = buf->s.duration;
             }
             if (stream->type == SYNC_TYPE_AUDIO)
@@ -1076,7 +1105,8 @@ static void OutputBuffer( sync_common_t * common )
             break;
         }
 
-        if (out_stream->next_pts == (int64_t)AV_NOPTS_VALUE)
+        if (out_stream->next_pts == (int64_t)AV_NOPTS_VALUE &&
+            out_stream->type != SYNC_TYPE_SUBTITLE)
         {
             // Initialize next_pts, it is used to make timestamp corrections
             // If doing p-to-p encoding, it will get reinitialized when
@@ -1211,7 +1241,10 @@ static void OutputBuffer( sync_common_t * common )
                 }
                 out_stream->first_frame = 1;
                 out_stream->first_pts = buf->s.start;
-                out_stream->next_pts  = buf->s.start;
+                if (out_stream->type != SYNC_TYPE_SUBTITLE)
+                {
+                    out_stream->next_pts  = buf->s.start;
+                }
                 out_stream->min_frame_duration = buf->s.duration;
             }
 
