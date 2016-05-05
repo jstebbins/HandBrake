@@ -105,6 +105,7 @@ struct hb_work_private_s
     int                    chap_scr;
     int                    new_chap;        // output chapter mark pending
     int64_t                last_pts;
+    int64_t                next_pts;
     uint32_t               nframes;
     uint32_t               decode_errors;
     packet_info_t          packet_info;
@@ -149,8 +150,9 @@ static int decavcodecaInit( hb_work_object_t * w, hb_job_t * job )
     hb_work_private_t * pv = calloc( 1, sizeof( hb_work_private_t ) );
     w->private_data = pv;
 
-    pv->job   = job;
-    pv->audio = w->audio;
+    pv->job       = job;
+    pv->audio     = w->audio;
+    pv->next_pts  = (int64_t)AV_NOPTS_VALUE;
     if (job)
         pv->title = job->title;
     else
@@ -1073,6 +1075,19 @@ static int decodeFrame( hb_work_object_t *w, packet_info_t * packet_info )
             frame_dur += pv->frame->repeat_pict * pv->field_duration;
         }
         hb_buffer_t * out = copy_frame( pv );
+        if (out->s.start == AV_NOPTS_VALUE)
+        {
+            out->s.start = pv->next_pts;
+        }
+        else
+        {
+            pv->next_pts = out->s.start;
+        }
+        if (pv->next_pts != (int64_t)AV_NOPTS_VALUE)
+        {
+            pv->next_pts += frame_dur;
+            out->s.stop   = pv->next_pts;
+        }
 
         if ( pv->frame->top_field_first )
         {
@@ -1293,7 +1308,8 @@ static int decavcodecvInit( hb_work_object_t * w, hb_job_t * job )
     hb_work_private_t *pv = calloc( 1, sizeof( hb_work_private_t ) );
 
     w->private_data = pv;
-    pv->job   = job;
+    pv->job         = job;
+    pv->next_pts    = (int64_t)AV_NOPTS_VALUE;
     if ( job )
         pv->title = job->title;
     else
@@ -1920,9 +1936,18 @@ static void decodeAudio(hb_work_private_t *pv, packet_info_t * packet_info)
                 out->s.scr_sequence = packet_info->scr_sequence;
                 out->s.start        = pv->frame->pkt_pts;
                 out->s.duration     = duration;
-                if (pv->frame->pkt_pts != AV_NOPTS_VALUE)
+                if (out->s.start == AV_NOPTS_VALUE)
                 {
-                    out->s.stop     = pv->frame->pkt_pts + duration;
+                    out->s.start = pv->next_pts;
+                }
+                else
+                {
+                    pv->next_pts = out->s.start;
+                }
+                if (pv->next_pts != (int64_t)AV_NOPTS_VALUE)
+                {
+                    pv->next_pts += duration;
+                    out->s.stop  = pv->next_pts;
                 }
                 hb_buffer_list_append(&pv->list, out);
 
