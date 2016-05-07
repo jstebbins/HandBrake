@@ -1525,10 +1525,10 @@ static void do_job(hb_job_t *job)
             audio = hb_list_item(job->list_audio, i);
 
             /* set up the audio work fifos */
+            audio->priv.fifo_in   = hb_fifo_init(FIFO_LARGE, FIFO_LARGE_WAKE);
             audio->priv.fifo_raw  = hb_fifo_init(FIFO_SMALL, FIFO_SMALL_WAKE);
             audio->priv.fifo_sync = hb_fifo_init(FIFO_SMALL, FIFO_SMALL_WAKE);
             audio->priv.fifo_out  = hb_fifo_init(FIFO_LARGE, FIFO_LARGE_WAKE);
-            audio->priv.fifo_in   = hb_fifo_init(FIFO_LARGE, FIFO_LARGE_WAKE);
 
             // Add audio decoder work object
             w = hb_audio_decoder(job->h, audio->config.in.codec);
