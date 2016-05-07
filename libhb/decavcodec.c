@@ -737,7 +737,7 @@ reordered_hash_rem(hb_work_private_t * pv, int64_t sequence)
         // This shouldn't happen...
         // But, this happens sometimes when libav outputs exactly the same
         // frame twice for some reason.
-        hb_deep_log(2, "decavcodec: missing sequence %"PRId64"", sequence);
+        hb_deep_log(3, "decavcodec: missing sequence %"PRId64"", sequence);
     }
     pv->reordered_hash[slot] = NULL;
     return reordered;
