@@ -182,6 +182,8 @@ static int  UpdateSCR( sync_stream_t * stream, hb_buffer_t * buf );
 static hb_buffer_t * FilterAudioFrame( sync_stream_t * stream,
                                        hb_buffer_t *buf );
 static void SortedQueueBuffer( sync_stream_t * stream, hb_buffer_t * buf );
+static hb_buffer_t * sanitizeSubtitle(sync_stream_t        * stream,
+                                      hb_buffer_t          * sub);
 
 static int fillQueues( sync_common_t * common )
 {
@@ -763,10 +765,12 @@ static void fixSubtitleOverlap( sync_stream_t * stream )
     buf = hb_list_item(stream->in_queue, 0);
     if (buf == NULL || (buf->s.flags & HB_BUF_FLAG_EOS))
     {
-        // start == stop is used as a marker to indicate the end of a subtitle
+        // marker to indicate the end of a subtitle
         return;
     }
-    if (buf->s.start <= stream->next_pts)
+    // Only SSA subs can overlap
+    if (stream->subtitle.subtitle->source != SSASUB &&
+        buf->s.start <= stream->next_pts)
     {
         int64_t       overlap;
         overlap = stream->next_pts - buf->s.start;
@@ -862,6 +866,24 @@ static void streamFlush( sync_stream_t * stream )
                     continue;
                 }
             }
+            int64_t subtitle_next_pts = AV_NOPTS_VALUE;
+            if (stream->type == SYNC_TYPE_SUBTITLE)
+            {
+                buf = sanitizeSubtitle(stream, buf);
+                if (buf == NULL)
+                {
+                    // sanitizeSubtitle can consume the buffer with no output
+                    continue;
+                }
+                // sanitizeSubtitle can return a list of subtitles.
+                // Find the pts of the last subtitle in the list
+                hb_buffer_t * sub = buf;
+                while (sub != NULL)
+                {
+                    subtitle_next_pts = sub->s.start;
+                    sub = sub->next;
+                }
+            }
             if (stream->type == SYNC_TYPE_AUDIO ||
                 stream->type == SYNC_TYPE_VIDEO)
             {
@@ -871,13 +893,7 @@ static void streamFlush( sync_stream_t * stream )
             }
             else
             {
-                // Last ditch effort to prevent timestamps from going backwards
-                // This can (and should only) affect subtitle streams.
-                if (buf->s.start < stream->next_pts)
-                {
-                    buf->s.start = stream->next_pts;
-                }
-                stream->next_pts = buf->s.start;
+                stream->next_pts = subtitle_next_pts;
             }
 
             if (buf->s.stop > 0)
@@ -910,10 +926,7 @@ static void streamFlush( sync_stream_t * stream )
                 // less than 256 ticks apart.
                 hb_buffer_close(&buf);
             }
-            else
-            {
-                hb_buffer_list_append(&stream->out_queue, buf);
-            }
+            hb_buffer_list_append(&stream->out_queue, buf);
         }
     }
     hb_buffer_list_append(&stream->out_queue, hb_buffer_eof_init());
@@ -1242,8 +1255,26 @@ static void OutputBuffer( sync_common_t * common )
             buf = FilterAudioFrame(out_stream, buf);
             if (buf == NULL)
             {
-                // FilterAudioFrame can conume the buffer with no output
+                // FilterAudioFrame can consume the buffer with no output
                 continue;
+            }
+        }
+        int64_t subtitle_next_pts = AV_NOPTS_VALUE;
+        if (out_stream->type == SYNC_TYPE_SUBTITLE)
+        {
+            buf = sanitizeSubtitle(out_stream, buf);
+            if (buf == NULL)
+            {
+                // sanitizeSubtitle can consume the buffer with no output
+                continue;
+            }
+            // sanitizeSubtitle can return a list of subtitles.
+            // Find the pts of the last subtitle in the list
+            hb_buffer_t * sub = buf;
+            while (sub != NULL)
+            {
+                subtitle_next_pts = sub->s.start;
+                sub = sub->next;
             }
         }
         if (out_stream->type == SYNC_TYPE_AUDIO ||
@@ -1255,18 +1286,7 @@ static void OutputBuffer( sync_common_t * common )
         }
         else
         {
-            // Last ditch effort to prevent timestamps from going backwards
-            // This can (and should only) affect subtitle streams.
-            if (buf->s.start < out_stream->next_pts)
-            {
-                buf->s.start = out_stream->next_pts;
-            }
-            if (buf->s.stop != AV_NOPTS_VALUE &&
-                buf->s.stop < out_stream->next_pts)
-            {
-                buf->s.stop = out_stream->next_pts;
-            }
-            out_stream->next_pts = buf->s.start;
+            out_stream->next_pts = subtitle_next_pts;
         }
 
         if (buf->s.stop > 0)
@@ -1307,10 +1327,7 @@ static void OutputBuffer( sync_common_t * common )
             // less than 256 ticks apart.
             hb_buffer_close(&buf);
         }
-        else
-        {
-            hb_buffer_list_append(&out_stream->out_queue, buf);
-        }
+        hb_buffer_list_append(&out_stream->out_queue, buf);
     } while (full);
 }
 
@@ -2791,16 +2808,13 @@ static int syncSubtitleWork( hb_work_object_t * w, hb_buffer_t ** buf_in,
 
     if (pv->common->done)
     {
-        hb_buffer_list_append(&pv->stream->out_queue, hb_buffer_eof_init());
-        in = hb_buffer_list_clear(&pv->stream->out_queue);
-        *buf_out = sanitizeSubtitle(pv->stream, in);
+        *buf_out = hb_buffer_list_clear(&pv->stream->out_queue);
         return HB_WORK_DONE;
     }
     if (in->s.flags & HB_BUF_FLAG_EOF)
     {
         streamFlush(pv->stream);
-        in = hb_buffer_list_clear(&pv->stream->out_queue);
-        *buf_out = sanitizeSubtitle(pv->stream, in);
+        *buf_out = hb_buffer_list_clear(&pv->stream->out_queue);
         if (pv->common->job->indepth_scan)
         {
             // When doing subtitle indepth scan, the pipeline ends at sync.
@@ -2813,11 +2827,7 @@ static int syncSubtitleWork( hb_work_object_t * w, hb_buffer_t ** buf_in,
     *buf_in = NULL;
     QueueBuffer(pv->stream, in);
     Synchronize(pv->common);
-    in = hb_buffer_list_clear(&pv->stream->out_queue);
-    if (in != NULL)
-    {
-        *buf_out = sanitizeSubtitle(pv->stream, in);
-    }
+    *buf_out = hb_buffer_list_clear(&pv->stream->out_queue);
 
     return HB_WORK_OK;
 }
