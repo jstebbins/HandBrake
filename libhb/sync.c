@@ -2813,6 +2813,9 @@ static int syncSubtitleWork( hb_work_object_t * w, hb_buffer_t ** buf_in,
     }
     if (in->s.flags & HB_BUF_FLAG_EOF)
     {
+        // sanitizeSubtitle requires EOF buffer to recognize that
+        // it needs to flush all subtitles.
+        hb_list_add(pv->stream->in_queue, hb_buffer_eof_init());
         streamFlush(pv->stream);
         *buf_out = hb_buffer_list_clear(&pv->stream->out_queue);
         if (pv->common->job->indepth_scan)
