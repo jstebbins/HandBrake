@@ -763,7 +763,8 @@ static void fixSubtitleOverlap( sync_stream_t * stream )
     hb_buffer_t * buf;
 
     buf = hb_list_item(stream->in_queue, 0);
-    if (buf == NULL || (buf->s.flags & HB_BUF_FLAG_EOS))
+    if (buf == NULL || (buf->s.flags & HB_BUF_FLAG_EOS) ||
+                       (buf->s.flags & HB_BUF_FLAG_EOF))
     {
         // marker to indicate the end of a subtitle
         return;
