@@ -1494,18 +1494,26 @@ static void do_job(hb_job_t *job)
     {
         job->fifo_mpeg2  = hb_fifo_init( FIFO_MINI, FIFO_MINI_WAKE );
         job->fifo_raw    = hb_fifo_init( FIFO_MINI, FIFO_MINI_WAKE );
-        job->fifo_sync   = hb_fifo_init( FIFO_MINI, FIFO_MINI_WAKE );
-        job->fifo_render = hb_fifo_init( FIFO_MINI, FIFO_MINI_WAKE );
-        job->fifo_mpeg4  = hb_fifo_init( FIFO_MINI, FIFO_MINI_WAKE );
+        if (!job->indepth_scan)
+        {
+            // When doing subtitle indepth scan, the pipeline ends at sync
+            job->fifo_sync   = hb_fifo_init( FIFO_MINI, FIFO_MINI_WAKE );
+            job->fifo_render = hb_fifo_init( FIFO_MINI, FIFO_MINI_WAKE );
+            job->fifo_mpeg4  = hb_fifo_init( FIFO_MINI, FIFO_MINI_WAKE );
+        }
     }
     else
 #endif
     {
         job->fifo_mpeg2  = hb_fifo_init( FIFO_SMALL, FIFO_SMALL_WAKE );
         job->fifo_raw    = hb_fifo_init( FIFO_SMALL, FIFO_SMALL_WAKE );
-        job->fifo_sync   = hb_fifo_init( FIFO_SMALL, FIFO_SMALL_WAKE );
-        job->fifo_mpeg4  = hb_fifo_init( FIFO_LARGE, FIFO_LARGE_WAKE );
-        job->fifo_render = NULL; // Attached to filter chain
+        if (!job->indepth_scan)
+        {
+            // When doing subtitle indepth scan, the pipeline ends at sync
+            job->fifo_sync   = hb_fifo_init( FIFO_SMALL, FIFO_SMALL_WAKE );
+            job->fifo_render = NULL; // Attached to filter chain
+            job->fifo_mpeg4  = hb_fifo_init( FIFO_LARGE, FIFO_LARGE_WAKE );
+        }
     }
 
     result = sanitize_audio(job);
@@ -1573,9 +1581,13 @@ static void do_job(hb_job_t *job)
         {
             // decsrtsub is a buffer source like reader.  It's input comes
             // from a file.
-            subtitle->fifo_in   = hb_fifo_init( FIFO_SMALL, FIFO_SMALL_WAKE );
+            subtitle->fifo_in  = hb_fifo_init( FIFO_SMALL, FIFO_SMALL_WAKE );
         }
-        subtitle->fifo_out  = hb_fifo_init( FIFO_SMALL, FIFO_SMALL_WAKE );
+        if (!job->indepth_scan)
+        {
+            // When doing subtitle indepth scan, the pipeline ends at sync
+            subtitle->fifo_out = hb_fifo_init( FIFO_SMALL, FIFO_SMALL_WAKE );
+        }
 
         w->fifo_in = subtitle->fifo_in;
         w->fifo_out = subtitle->fifo_raw;

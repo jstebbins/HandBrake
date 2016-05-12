@@ -805,13 +805,25 @@ static void fixStreamTimestamps( sync_stream_t * stream )
     }
 }
 
+static void fifo_push( hb_fifo_t * fifo, hb_buffer_t * buf )
+{
+    if (fifo != NULL)
+    {
+        hb_fifo_push(fifo, buf);
+    }
+    else
+    {
+        hb_buffer_close(&buf);
+    }
+}
+
 static void sendEof( sync_common_t * common )
 {
     int ii;
 
     for (ii = 0; ii < common->stream_count; ii++)
     {
-        hb_fifo_push(common->streams[ii].fifo_out, hb_buffer_eof_init());
+        fifo_push(common->streams[ii].fifo_out, hb_buffer_eof_init());
     }
 }
 
@@ -925,10 +937,10 @@ static void streamFlush( sync_stream_t * stream )
                 // less than 256 ticks apart.
                 hb_buffer_close(&buf);
             }
-            hb_fifo_push(stream->fifo_out, buf);
+            fifo_push(stream->fifo_out, buf);
         }
     }
-    hb_fifo_push(stream->fifo_out, hb_buffer_eof_init());
+    fifo_push(stream->fifo_out, hb_buffer_eof_init());
 
     hb_unlock(stream->common->mutex);
 }
@@ -1312,7 +1324,7 @@ static void OutputBuffer( sync_common_t * common )
             // less than 256 ticks apart.
             hb_buffer_close(&buf);
         }
-        hb_fifo_push(out_stream->fifo_out, buf);
+        fifo_push(out_stream->fifo_out, buf);
     } while (full);
 }
 
@@ -1324,11 +1336,14 @@ static void Synchronize( sync_stream_t * stream )
     // blocking when output fifos become full.  Wait here before
     // performing any output when the output fifo for the input stream
     // is full
-    while (!common->job->done && !*common->job->die)
+    if (stream->fifo_out != NULL)
     {
-        if (hb_fifo_full_wait(stream->fifo_out))
+        while (!common->job->done && !*common->job->die)
         {
-            break;
+            if (hb_fifo_full_wait(stream->fifo_out))
+            {
+                break;
+            }
         }
     }
 
@@ -1875,12 +1890,6 @@ static int syncVideoInit( hb_work_object_t * w, hb_job_t * job)
 
     w->fifo_in                  = job->fifo_raw;
     w->fifo_out                 = job->fifo_sync;
-
-    if (job->indepth_scan)
-    {
-        // When doing subtitle indepth scan, the pipeline ends at sync
-        w->fifo_out = NULL;
-    }
 
     if (job->pass_id == HB_PASS_ENCODE_2ND)
     {
