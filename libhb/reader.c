@@ -50,6 +50,10 @@ struct hb_work_private_s
     int            start_found;     // found pts_to_start point
     int64_t        pts_to_start;
     int            chapter_end;
+
+    uint64_t       st_first;
+    int64_t        duration;
+
     hb_fifo_t   ** fifos;
 
     buffer_splice_list_t * splice_list;
@@ -61,12 +65,28 @@ struct hb_work_private_s
  **********************************************************************/
 static hb_fifo_t ** GetFifoForId( hb_work_private_t * r, int id );
 static hb_buffer_list_t * get_splice_list(hb_work_private_t * r, int id);
+static void UpdateState( hb_work_private_t  * r );
 
 /***********************************************************************
  * reader_init
  ***********************************************************************
  *
  **********************************************************************/
+static int64_t chapter_end_pts(hb_title_t * title, int chapter_end )
+{
+    hb_chapter_t * chapter;
+    int64_t        duration;
+    int            ii;
+
+    duration = 0;
+    for (ii = 0; ii < chapter_end; ii++)
+    {
+        chapter = hb_list_item(title->list_chapter, ii);
+        duration += chapter->duration;
+    }
+    return duration;
+}
+
 static int hb_reader_open( hb_work_private_t * r )
 {
     if ( r->title->type == HB_BD_TYPE )
@@ -94,12 +114,15 @@ static int hb_reader_open( hb_work_private_t * r )
             // Note, bd seeks always put us to an i-frame.  no need
             // to start decoding early using r->pts_to_start
             hb_bd_seek_pts(r->bd, r->job->pts_to_start);
+            r->duration -= r->job->pts_to_start;
             r->job->pts_to_start = 0;
             r->start_found = 1;
         }
         else
         {
             hb_bd_seek_chapter(r->bd, r->job->chapter_start);
+            r->duration -= chapter_end_pts(r->job->title,
+                                           r->job->chapter_start - 1);
         }
     }
     else if (r->title->type == HB_DVD_TYPE)
@@ -111,6 +134,8 @@ static int hb_reader_open( hb_work_private_t * r )
             hb_dvd_close(&r->dvd);
             return 1;
         }
+        r->duration -= chapter_end_pts(r->job->title,
+                                       r->job->chapter_start - 1);
         if (r->job->angle)
         {
             hb_dvd_set_angle(r->dvd, r->job->angle);
@@ -146,6 +171,7 @@ static int hb_reader_open( hb_work_private_t * r )
                 // that we want.  So we will retrieve the start time of the
                 // first packet we get, subtract that from pts_to_start, and
                 // inspect the reset of the frames in sync.
+                r->duration -= r->job->pts_to_start;
             }
             else
             {
@@ -177,6 +203,8 @@ static int hb_reader_open( hb_work_private_t * r )
              * Seek to the start chapter.
              */
             hb_stream_seek_chapter(r->stream, start);
+            r->duration -= chapter_end_pts(r->job->title,
+                                           r->job->chapter_start - 1);
         }
     }
     else
@@ -204,8 +232,10 @@ static int reader_init( hb_work_object_t * w, hb_job_t * job )
     r->last_pts       = AV_NOPTS_VALUE;
 
     r->chapter_end = job->chapter_end;
-    if ( !job->pts_to_start )
+    if (!job->pts_to_start)
+    {
         r->start_found = 1;
+    }
     else
     {
         // The frame at the actual start time may not be an i-frame
@@ -213,6 +243,29 @@ static int reader_init( hb_work_object_t * w, hb_job_t * job )
         // sync.c will drop early frames.
         // Starting a little over 10 seconds early
         r->pts_to_start = MAX(0, job->pts_to_start - 1000000);
+    }
+
+    if (job->pts_to_stop > 0)
+    {
+        r->duration = job->pts_to_start + job->pts_to_stop;
+    }
+    else if (job->frame_to_stop)
+    {
+        int frames = job->frame_to_start + job->frame_to_stop;
+        r->duration = (int64_t)frames * job->title->vrate.den * 90000 /
+                                        job->title->vrate.num;
+    }
+    else
+    {
+        int count = hb_list_count(job->title->list_chapter);
+        if (count == 0 || count <= job->chapter_end)
+        {
+            r->duration = job->title->duration;
+        }
+        else
+        {
+            r->duration = chapter_end_pts(job->title, job->chapter_end);
+        }
     }
 
     // Count number of splice lists needed for merging buffers
@@ -463,6 +516,7 @@ static int reader_work( hb_work_object_t * w, hb_buffer_t ** buf_in,
         if (buf->s.start > r->last_pts)
         {
             r->last_pts = buf->s.start;
+            UpdateState(r);
         }
 
         fifos = GetFifoForId( r, buf->s.id );
@@ -531,9 +585,9 @@ static hb_fifo_t ** GetFifoForId( hb_work_private_t * r, int id )
     hb_subtitle_t * subtitle;
     int             i, n;
 
-    if( id == title->video_id )
+    if (id == title->video_id)
     {
-        if (job->indepth_scan && !job->frame_to_stop)
+        if (job->indepth_scan && r->start_found)
         {
             /*
              * Ditch the video here during the indepth scan until
@@ -552,7 +606,7 @@ static hb_fifo_t ** GetFifoForId( hb_work_private_t * r, int id )
         }
     }
 
-    for( i = n = 0; i < hb_list_count( job->list_subtitle ); i++ )
+    for (i = n = 0; i < hb_list_count( job->list_subtitle ); i++)
     {
         subtitle =  hb_list_item( job->list_subtitle, i );
         if (id == subtitle->id)
@@ -561,24 +615,24 @@ static hb_fifo_t ** GetFifoForId( hb_work_private_t * r, int id )
             r->fifos[n++] = subtitle->fifo_in;
         }
     }
-    if ( n != 0 )
+    if (n != 0)
     {
         r->fifos[n] = NULL;
         return r->fifos;
     }
 
-    if( !job->indepth_scan )
+    if (!job->indepth_scan)
     {
-        for( i = n = 0; i < hb_list_count( job->list_audio ); i++ )
+        for (i = n = 0; i < hb_list_count( job->list_audio ); i++)
         {
             audio = hb_list_item( job->list_audio, i );
-            if( id == audio->id )
+            if (id == audio->id)
             {
                 r->fifos[n++] = audio->priv.fifo_in;
             }
         }
 
-        if( n != 0 )
+        if (n != 0)
         {
             r->fifos[n] = NULL;
             return r->fifos;
@@ -600,4 +654,57 @@ static hb_buffer_list_t * get_splice_list(hb_work_private_t * r, int id)
         }
     }
     return NULL;
+}
+
+static void UpdateState( hb_work_private_t  * r )
+{
+    hb_state_t state;
+    uint64_t now;
+    double avg;
+
+    if (!r->job->indepth_scan || !r->start_found)
+    {
+        // Only update state when sync.c is not handling state updates
+        return;
+    }
+
+    now = hb_get_date();
+    if( !r->st_first )
+    {
+        r->st_first = now;
+    }
+
+    hb_get_state2(r->job->h, &state);
+#define p state.param.working
+    state.state = HB_STATE_WORKING;
+    p.progress  = (float) r->last_pts / (float) r->duration;
+    if( p.progress > 1.0 )
+    {
+        p.progress = 1.0;
+    }
+    p.rate_cur = 0.0;
+    p.rate_avg = 0.0;
+    if (now > r->st_first)
+    {
+        int eta;
+
+        avg = 1000.0 * (double)r->last_pts / (now - r->st_first);
+        eta = (r->duration - r->last_pts) / avg;
+        if (eta < 0)
+        {
+            eta = 0;
+        }
+        p.hours   = eta / 3600;
+        p.minutes = ( eta % 3600 ) / 60;
+        p.seconds = eta % 60;
+    }
+    else
+    {
+        p.hours    = -1;
+        p.minutes  = -1;
+        p.seconds  = -1;
+    }
+#undef p
+
+    hb_set_state( r->job->h, &state );
 }
