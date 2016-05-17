@@ -1246,9 +1246,9 @@ static void OutputBuffer( sync_common_t * common )
                 default:
                     break;
             }
-            out_stream->first_frame = 1;
-            out_stream->first_pts = buf->s.start;
-            out_stream->next_pts  = buf->s.start;
+            out_stream->first_frame        = 1;
+            out_stream->first_pts          = buf->s.start;
+            out_stream->next_pts           = buf->s.start;
             out_stream->min_frame_duration = buf->s.duration;
         }
 
