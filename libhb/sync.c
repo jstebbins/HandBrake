@@ -878,7 +878,7 @@ static void streamFlush( sync_stream_t * stream )
                 buf = FilterAudioFrame(stream, buf);
                 if (buf == NULL)
                 {
-                    // FilterAudioFrame can conume the buffer with no output
+                    // FilterAudioFrame can cosnume the buffer with no output
                     continue;
                 }
             }
