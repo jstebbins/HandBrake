@@ -1891,7 +1891,7 @@ static int syncVideoInit( hb_work_object_t * w, hb_job_t * job)
     pv->stream->next_pts        = (int64_t)AV_NOPTS_VALUE;
     pv->stream->last_pts        = (int64_t)AV_NOPTS_VALUE;
     pv->stream->last_scr_pts    = (int64_t)AV_NOPTS_VALUE;
-    pv->stream->last_duration = (int64_t)AV_NOPTS_VALUE;
+    pv->stream->last_duration   = (int64_t)AV_NOPTS_VALUE;
     pv->stream->fifo_out        = job->fifo_sync;
     pv->stream->video.id        = job->title->video_id;
 
