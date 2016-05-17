@@ -1935,7 +1935,7 @@ int encqsvWork(hb_work_object_t *w, hb_buffer_t **buf_in, hb_buffer_t **buf_out)
      * miscellaneous hard-to-disagnose issues that may occur when resuming
      * an encode after flushing the encoder or using MFXVideoENCODE_Reset.
      */
-    if (in->s.new_chap > pv->chapter && job->chapter_markers)
+    if (in->s.new_chap > 0 && job->chapter_markers)
     {
         mfxStatus sts;
 
