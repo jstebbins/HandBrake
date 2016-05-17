@@ -572,6 +572,59 @@ static int reader_work( hb_work_object_t * w, hb_buffer_t ** buf_in,
     return HB_WORK_OK;
 }
 
+static void UpdateState( hb_work_private_t  * r )
+{
+    hb_state_t state;
+    uint64_t now;
+    double avg;
+
+    if (!r->job->indepth_scan || !r->start_found)
+    {
+        // Only update state when sync.c is not handling state updates
+        return;
+    }
+
+    now = hb_get_date();
+    if( !r->st_first )
+    {
+        r->st_first = now;
+    }
+
+    hb_get_state2(r->job->h, &state);
+#define p state.param.working
+    state.state = HB_STATE_WORKING;
+    p.progress  = (float) r->last_pts / (float) r->duration;
+    if( p.progress > 1.0 )
+    {
+        p.progress = 1.0;
+    }
+    p.rate_cur = 0.0;
+    p.rate_avg = 0.0;
+    if (now > r->st_first)
+    {
+        int eta;
+
+        avg = 1000.0 * (double)r->last_pts / (now - r->st_first);
+        eta = (r->duration - r->last_pts) / avg;
+        if (eta < 0)
+        {
+            eta = 0;
+        }
+        p.hours   = eta / 3600;
+        p.minutes = ( eta % 3600 ) / 60;
+        p.seconds = eta % 60;
+    }
+    else
+    {
+        p.hours    = -1;
+        p.minutes  = -1;
+        p.seconds  = -1;
+    }
+#undef p
+
+    hb_set_state( r->job->h, &state );
+}
+
 /***********************************************************************
  * GetFifoForId
  ***********************************************************************
@@ -654,57 +707,4 @@ static hb_buffer_list_t * get_splice_list(hb_work_private_t * r, int id)
         }
     }
     return NULL;
-}
-
-static void UpdateState( hb_work_private_t  * r )
-{
-    hb_state_t state;
-    uint64_t now;
-    double avg;
-
-    if (!r->job->indepth_scan || !r->start_found)
-    {
-        // Only update state when sync.c is not handling state updates
-        return;
-    }
-
-    now = hb_get_date();
-    if( !r->st_first )
-    {
-        r->st_first = now;
-    }
-
-    hb_get_state2(r->job->h, &state);
-#define p state.param.working
-    state.state = HB_STATE_WORKING;
-    p.progress  = (float) r->last_pts / (float) r->duration;
-    if( p.progress > 1.0 )
-    {
-        p.progress = 1.0;
-    }
-    p.rate_cur = 0.0;
-    p.rate_avg = 0.0;
-    if (now > r->st_first)
-    {
-        int eta;
-
-        avg = 1000.0 * (double)r->last_pts / (now - r->st_first);
-        eta = (r->duration - r->last_pts) / avg;
-        if (eta < 0)
-        {
-            eta = 0;
-        }
-        p.hours   = eta / 3600;
-        p.minutes = ( eta % 3600 ) / 60;
-        p.seconds = eta % 60;
-    }
-    else
-    {
-        p.hours    = -1;
-        p.minutes  = -1;
-        p.seconds  = -1;
-    }
-#undef p
-
-    hb_set_state( r->job->h, &state );
 }
