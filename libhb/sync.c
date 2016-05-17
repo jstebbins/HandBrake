@@ -81,8 +81,8 @@ typedef struct
     // PTS synchronization
     hb_list_t         * delta_list;
     int64_t             pts_slip;
-    double              next_out_pts;
-    double              last_out_pts;
+    double              next_pts;
+    double              last_pts;
 
     // SCR recovery
     double              last_scr_pts;
@@ -399,7 +399,7 @@ static void applyDeltas( sync_common_t * common )
             int64_t       prev_start, max = 0;
             hb_buffer_t * buf;
 
-            prev_start = stream->next_out_pts;
+            prev_start = stream->next_pts;
             for (jj = 0; jj < hb_list_count(stream->in_queue); jj++)
             {
                 buf = hb_list_item(stream->in_queue, jj);
@@ -469,21 +469,21 @@ static void removeVideoJitter( sync_stream_t * stream, int stop )
 {
     int           ii;
     hb_buffer_t * buf;
-    double        frame_duration, next_out_pts;
+    double        frame_duration, next_pts;
 
     frame_duration = 90000. * stream->common->job->title->vrate.den /
                               stream->common->job->title->vrate.num;
 
     buf = hb_list_item(stream->in_queue, 0);
-    buf->s.start = stream->next_out_pts;
-    next_out_pts = stream->next_out_pts + frame_duration;
+    buf->s.start = stream->next_pts;
+    next_pts = stream->next_pts + frame_duration;
     for (ii = 1; ii <= stop; ii++)
     {
         buf->s.duration = frame_duration;
-        buf->s.stop = next_out_pts;
+        buf->s.stop = next_pts;
         buf = hb_list_item(stream->in_queue, ii);
-        buf->s.start = next_out_pts;
-        next_out_pts += frame_duration;
+        buf->s.start = next_pts;
+        next_pts += frame_duration;
     }
 }
 
@@ -511,7 +511,7 @@ static void dejitterVideo( sync_stream_t * stream )
 
     // Look for start of jittered sequence
     buf      = hb_list_item(stream->in_queue, 1);
-    duration = buf->s.start - stream->next_out_pts;
+    duration = buf->s.start - stream->next_pts;
     if (ABS(duration - frame_duration) < 1.1)
     {
         // Ignore small jitter
@@ -523,7 +523,7 @@ static void dejitterVideo( sync_stream_t * stream )
     for (ii = 1; ii < count; ii++)
     {
         buf      = hb_list_item(stream->in_queue, ii);
-        duration = buf->s.start - stream->next_out_pts;
+        duration = buf->s.start - stream->next_pts;
 
         // Only dejitter video that aligns periodically
         // with the frame durations.
@@ -558,7 +558,7 @@ static void fixVideoOverlap( sync_stream_t * stream )
     {
         // For video, an overlap is where the entire frame is
         // in the past.
-        overlap = stream->next_out_pts - buf->s.stop;
+        overlap = stream->next_pts - buf->s.stop;
         if (overlap >= 0)
         {
             if (stream->drop == 0)
@@ -599,7 +599,7 @@ static void removeAudioJitter(sync_stream_t * stream, int stop)
 {
     int           ii;
     hb_buffer_t * buf;
-    double        next_out_pts;
+    double        next_pts;
 
     // If duration of sum of packet durations is close to duration
     // as measured by timestamps, align timestamps to packet durations.
@@ -607,15 +607,15 @@ static void removeAudioJitter(sync_stream_t * stream, int stop)
     // number of samples and are therefore a reliable measure
     // of the actual duration of an audio frame.
     buf = hb_list_item(stream->in_queue, 0);
-    buf->s.start = stream->next_out_pts;
-    next_out_pts = stream->next_out_pts + buf->s.duration;
+    buf->s.start = stream->next_pts;
+    next_pts = stream->next_pts + buf->s.duration;
     for (ii = 1; ii <= stop; ii++)
     {
         // Duration can be fractional, so track fractional PTS
-        buf->s.stop = next_out_pts;
+        buf->s.stop = next_pts;
         buf = hb_list_item(stream->in_queue, ii);
-        buf->s.start = next_out_pts;
-        next_out_pts += buf->s.duration;
+        buf->s.start = next_pts;
+        next_pts += buf->s.duration;
     }
 }
 
@@ -642,7 +642,7 @@ static void dejitterAudio( sync_stream_t * stream )
     jitter_stop = 0;
     buf0 = hb_list_item(stream->in_queue, 0);
     buf1 = hb_list_item(stream->in_queue, 1);
-    if (ABS(buf0->s.duration - (buf1->s.start - stream->next_out_pts)) < 1.1)
+    if (ABS(buf0->s.duration - (buf1->s.start - stream->next_pts)) < 1.1)
     {
         // Ignore very small jitter
         return;
@@ -654,7 +654,7 @@ static void dejitterAudio( sync_stream_t * stream )
     for (ii = 1; ii < count; ii++)
     {
         buf = hb_list_item(stream->in_queue, ii);
-        if (ABS(duration - (buf->s.start - stream->next_out_pts)) < (90 * 40))
+        if (ABS(duration - (buf->s.start - stream->next_pts)) < (90 * 40))
         {
             // Finds the largest span that has low jitter
             jitter_stop = ii;
@@ -680,7 +680,7 @@ static void fixAudioGap( sync_stream_t * stream )
     }
 
     buf  = hb_list_item(stream->in_queue, 0);
-    gap = buf->s.start - stream->next_out_pts;
+    gap = buf->s.start - stream->next_pts;
 
     // If there's a gap of more than a minute between the last
     // frame and this, assume we got a corrupted timestamp.
@@ -690,7 +690,7 @@ static void fixAudioGap( sync_stream_t * stream )
         {
             stream->gap_pts = buf->s.start;
         }
-        addDelta(stream->common, stream->next_out_pts, gap);
+        addDelta(stream->common, stream->next_pts, gap);
         applyDeltas(stream->common);
         stream->gap_duration += gap;
     }
@@ -702,7 +702,7 @@ static void fixAudioGap( sync_stream_t * stream )
         if (gap >= 90000LL * 60)
         {
             // Fix "corrupted" timestamp
-            buf->s.start = stream->next_out_pts;
+            buf->s.start = stream->next_pts;
         }
         if (stream->gap_duration > 0)
         {
@@ -731,7 +731,7 @@ static void fixAudioOverlap( sync_stream_t * stream )
     // Check if subsequent buffers also overlap.
     while ((buf = hb_list_item(stream->in_queue, 0)) != NULL)
     {
-        overlap = stream->next_out_pts - buf->s.start;
+        overlap = stream->next_pts - buf->s.start;
         if (overlap > 90 * 20)
         {
             if (stream->drop == 0)
@@ -780,10 +780,10 @@ static void fixSubtitleOverlap( sync_stream_t * stream )
     }
     // Only SSA subs can overlap
     if (stream->subtitle.subtitle->source != SSASUB &&
-        buf->s.start <= stream->last_out_pts)
+        buf->s.start <= stream->last_pts)
     {
         int64_t       overlap;
-        overlap = stream->last_out_pts - buf->s.start;
+        overlap = stream->last_pts - buf->s.start;
         hb_log("sync: subtitle 0x%x time went backwards %d ms, PTS %"PRId64"",
                stream->subtitle.subtitle->id, (int)overlap / 90,
                buf->s.start);
@@ -870,7 +870,7 @@ static void streamFlush( sync_stream_t * stream )
                 }
                 stream->first_frame        = 1;
                 stream->first_pts          = buf->s.start;
-                stream->next_out_pts       = buf->s.start;
+                stream->next_pts           = buf->s.start;
                 stream->min_frame_duration = buf->s.duration;
             }
             if (stream->type == SYNC_TYPE_AUDIO)
@@ -903,15 +903,15 @@ static void streamFlush( sync_stream_t * stream )
             if (stream->type == SYNC_TYPE_AUDIO ||
                 stream->type == SYNC_TYPE_VIDEO)
             {
-                buf->s.start = stream->next_out_pts;
-                buf->s.stop  = stream->next_out_pts + buf->s.duration;
-                stream->last_out_pts = stream->next_out_pts;
-                stream->next_out_pts += buf->s.duration;
+                buf->s.start = stream->next_pts;
+                buf->s.stop  = stream->next_pts + buf->s.duration;
+                stream->last_pts = stream->next_pts;
+                stream->next_pts += buf->s.duration;
             }
             else
             {
-                stream->next_out_pts =
-                stream->last_out_pts = subtitle_last_pts;
+                stream->next_pts =
+                stream->last_pts = subtitle_last_pts;
             }
 
             if (buf->s.stop > 0)
@@ -1131,13 +1131,13 @@ static void OutputBuffer( sync_common_t * common )
             break;
         }
 
-        if (out_stream->next_out_pts == (int64_t)AV_NOPTS_VALUE)
+        if (out_stream->next_pts == (int64_t)AV_NOPTS_VALUE)
         {
-            // Initialize next_out_pts, it is used to make timestamp corrections
+            // Initialize next_pts, it is used to make timestamp corrections
             // If doing p-to-p encoding, it will get reinitialized when
             // we find the start point.
             buf = hb_list_item(out_stream->in_queue, 0);
-            out_stream->next_out_pts  = buf->s.start;
+            out_stream->next_pts  = buf->s.start;
         }
 
         // Make timestamp adjustments to eliminate jitter, gaps, and overlaps
@@ -1248,7 +1248,7 @@ static void OutputBuffer( sync_common_t * common )
             }
             out_stream->first_frame = 1;
             out_stream->first_pts = buf->s.start;
-            out_stream->next_out_pts  = buf->s.start;
+            out_stream->next_pts  = buf->s.start;
             out_stream->min_frame_duration = buf->s.duration;
         }
 
@@ -1282,15 +1282,15 @@ static void OutputBuffer( sync_common_t * common )
         if (out_stream->type == SYNC_TYPE_AUDIO ||
             out_stream->type == SYNC_TYPE_VIDEO)
         {
-            buf->s.start = out_stream->next_out_pts;
-            buf->s.stop  = out_stream->next_out_pts + buf->s.duration;
-            out_stream->last_out_pts = out_stream->next_out_pts;
-            out_stream->next_out_pts += buf->s.duration;
+            buf->s.start = out_stream->next_pts;
+            buf->s.stop  = out_stream->next_pts + buf->s.duration;
+            out_stream->last_pts = out_stream->next_pts;
+            out_stream->next_pts += buf->s.duration;
         }
         else
         {
-            out_stream->next_out_pts =
-            out_stream->last_out_pts = subtitle_last_pts;
+            out_stream->next_pts =
+            out_stream->last_pts = subtitle_last_pts;
         }
 
         if (buf->s.stop > 0)
@@ -1714,8 +1714,8 @@ static int InitAudio( sync_common_t * common, int index )
     if (pv->stream->delta_list == NULL) goto fail;
     pv->stream->type            = SYNC_TYPE_AUDIO;
     pv->stream->first_pts       = AV_NOPTS_VALUE;
-    pv->stream->next_out_pts    = (int64_t)AV_NOPTS_VALUE;
-    pv->stream->last_out_pts    = (int64_t)AV_NOPTS_VALUE;
+    pv->stream->next_pts        = (int64_t)AV_NOPTS_VALUE;
+    pv->stream->last_pts        = (int64_t)AV_NOPTS_VALUE;
     pv->stream->last_scr_pts    = (int64_t)AV_NOPTS_VALUE;
     pv->stream->last_duration   = (int64_t)AV_NOPTS_VALUE;
     pv->stream->audio.audio     = audio;
@@ -1789,8 +1789,8 @@ static int InitSubtitle( sync_common_t * common, int index )
     if (pv->stream->delta_list == NULL) goto fail;
     pv->stream->type              = SYNC_TYPE_SUBTITLE;
     pv->stream->first_pts         = AV_NOPTS_VALUE;
-    pv->stream->next_out_pts      = (int64_t)AV_NOPTS_VALUE;
-    pv->stream->last_out_pts      = (int64_t)AV_NOPTS_VALUE;
+    pv->stream->next_pts          = (int64_t)AV_NOPTS_VALUE;
+    pv->stream->last_pts          = (int64_t)AV_NOPTS_VALUE;
     pv->stream->last_scr_pts      = (int64_t)AV_NOPTS_VALUE;
     pv->stream->last_duration     = (int64_t)AV_NOPTS_VALUE;
     pv->stream->subtitle.subtitle = subtitle;
@@ -1888,8 +1888,8 @@ static int syncVideoInit( hb_work_object_t * w, hb_job_t * job)
     if (pv->stream->delta_list == NULL) goto fail;
     pv->stream->type            = SYNC_TYPE_VIDEO;
     pv->stream->first_pts       = AV_NOPTS_VALUE;
-    pv->stream->next_out_pts    = (int64_t)AV_NOPTS_VALUE;
-    pv->stream->last_out_pts    = (int64_t)AV_NOPTS_VALUE;
+    pv->stream->next_pts        = (int64_t)AV_NOPTS_VALUE;
+    pv->stream->last_pts        = (int64_t)AV_NOPTS_VALUE;
     pv->stream->last_scr_pts    = (int64_t)AV_NOPTS_VALUE;
     pv->stream->last_duration = (int64_t)AV_NOPTS_VALUE;
     pv->stream->fifo_out        = job->fifo_sync;
@@ -2623,8 +2623,8 @@ static hb_buffer_t * FilterAudioFrame( sync_stream_t * stream,
             }
             buf->s.duration = 90000. * stream->audio.src.pkt.output_frames_gen /
                               audio->config.out.samplerate;
-            buf->s.start = stream->next_out_pts;
-            buf->s.stop = stream->next_out_pts + buf->s.duration;
+            buf->s.start = stream->next_pts;
+            buf->s.stop = stream->next_pts + buf->s.duration;
         }
         if (audio->config.out.gain > 0.0)
         {
