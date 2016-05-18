@@ -1165,8 +1165,8 @@ static void OutputBuffer( sync_common_t * common )
                     out_stream->frame_count = 0;
                 }
             }
-            if (common->job->pts_to_start > 0 &&
-                out_stream->type != SYNC_TYPE_SUBTITLE)
+            else if (common->job->pts_to_start > 0 &&
+                     out_stream->type != SYNC_TYPE_SUBTITLE)
             {
                 if (buf->s.start >= common->job->pts_to_start)
                 {
