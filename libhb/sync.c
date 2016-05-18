@@ -1106,7 +1106,8 @@ static void OutputBuffer( sync_common_t * common )
                 {
                     // If we have not yet found the start point for
                     // p-to-p, grab the first stream that has data
-                    // above min_len.
+                    // above min_len. This ensures that we prefer
+                    // video buffers for finding start point.
                     out_stream = stream;
                     break;
                 }
