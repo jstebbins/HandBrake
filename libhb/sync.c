@@ -112,6 +112,7 @@ typedef struct
         {
             int     id;
             int     cadence[12];
+            int     new_chap;
         } video;
 
         // Audio stream context
@@ -186,6 +187,31 @@ static hb_buffer_t * FilterAudioFrame( sync_stream_t * stream,
 static void SortedQueueBuffer( sync_stream_t * stream, hb_buffer_t * buf );
 static hb_buffer_t * sanitizeSubtitle(sync_stream_t        * stream,
                                       hb_buffer_t          * sub);
+
+static void saveChap( sync_stream_t * stream, hb_buffer_t * buf )
+{
+    if (stream->type != SYNC_TYPE_VIDEO || buf == NULL)
+    {
+        return;
+    }
+    if (buf->s.new_chap > 0)
+    {
+        stream->video.new_chap = buf->s.new_chap;
+    }
+}
+
+static void restoreChap( sync_stream_t * stream, hb_buffer_t * buf )
+{
+    if (stream->type != SYNC_TYPE_VIDEO || buf == NULL)
+    {
+        return;
+    }
+    if (stream->video.new_chap > 0 && buf->s.new_chap <= 0)
+    {
+        buf->s.new_chap = stream->video.new_chap;
+        stream->video.new_chap = 0;
+    }
+}
 
 static int fillQueues( sync_common_t * common )
 {
@@ -577,6 +603,7 @@ static void fixVideoOverlap( sync_stream_t * stream )
                                      stream->common->job->title->vrate.num;
             stream->drop++;
             drop++;
+            saveChap(stream, buf);
             hb_buffer_close(&buf);
         }
         else
@@ -942,8 +969,10 @@ static void streamFlush( sync_stream_t * stream )
                 //
                 // Also, encx264.c can't handle timestamps that are spaced
                 // less than 256 ticks apart.
+                saveChap(stream, buf);
                 hb_buffer_close(&buf);
             }
+            restoreChap(stream, buf);
             fifo_push(stream->fifo_out, buf);
         }
     }
@@ -1330,8 +1359,10 @@ static void OutputBuffer( sync_common_t * common )
             //
             // Also, encx264.c can't handle timestamps that are spaced
             // less than 256 ticks apart.
+            saveChap(out_stream, buf);
             hb_buffer_close(&buf);
         }
+        restoreChap(out_stream, buf);
         fifo_push(out_stream->fifo_out, buf);
     } while (full);
 }
@@ -1660,6 +1691,7 @@ static void QueueBuffer( sync_stream_t * stream, hb_buffer_t * buf )
             hb_list_count(stream->in_queue) == 0)
         {
             // We require an initial pts to start synchronization
+            saveChap(stream, buf);
             hb_buffer_close(&buf);
             hb_unlock(stream->common->mutex);
             return;
