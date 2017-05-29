@@ -606,57 +606,54 @@ static hb_dict_t * generate_lapsharp_settings(const char *preset,
         !strcasecmp(preset, "stronger"))
     {
         double strength[2];
-        char  *kernel_string[2];
+        const char *kernel_string[2];
 
         if (tune == NULL || !strcasecmp(tune, "none"))
         {
-            strength[0]     = strength[1] = 0.2;
-            kernel_string[0] = strdup("isolap");
-            kernel_string[1] = strdup("isolap");
+            strength[0]      = strength[1]      = 0.2;
+            kernel_string[0] = kernel_string[1] = "isolap";
             if (!strcasecmp(preset, "ultralight"))
             {
-                strength[0] = strength[1] = 0.05;
+                strength[0]  = strength[1] = 0.05;
             }
             else if (!strcasecmp(preset, "light"))
             {
-                strength[0] = strength[1] = 0.1;
+                strength[0]  = strength[1] = 0.1;
             }
             else if (!strcasecmp(preset, "strong"))
             {
-                strength[0] = strength[1] = 0.3;
+                strength[0]  = strength[1] = 0.3;
             }
             else if (!strcasecmp(preset, "stronger"))
             {
-                strength[0] = strength[1] = 0.5;
+                strength[0]  = strength[1] = 0.5;
             }
         }
         else if (!strcasecmp(tune, "film"))
         {
-            strength[0]     = 0.2;  strength[1] = 0.12;
-            kernel_string[0] = strdup("isolap");
-            kernel_string[1] = strdup("isolap");
+            strength[0]      = 0.2;  strength[1] = 0.12;
+            kernel_string[0] = kernel_string[1]  = "isolap";
             if (!strcasecmp(preset, "ultralight"))
             {
-                strength[0] = 0.05; strength[1] = 0.03;
+                strength[0]  = 0.05; strength[1] = 0.03;
             }
             else if (!strcasecmp(preset, "light"))
             {
-                strength[0] = 0.1;  strength[1] = 0.06;
+                strength[0]  = 0.1;  strength[1] = 0.06;
             }
             else if (!strcasecmp(preset, "strong"))
             {
-                strength[0] = 0.3;  strength[1] = 0.2;
+                strength[0]  = 0.3;  strength[1] = 0.2;
             }
             else if (!strcasecmp(preset, "stronger"))
             {
-                strength[0] = 0.5;  strength[1] = 0.3;
+                strength[0]  = 0.5;  strength[1] = 0.3;
             }
         }
         else if (!strcasecmp(tune, "grain"))
         {
-            strength[0]     = 0.2;  strength[1] = 0.1;
-            kernel_string[0] = strdup("log");
-            kernel_string[1] = strdup("log");
+            strength[0]      = 0.2; strength[1] = 0.1;
+            kernel_string[0] = kernel_string[1] = "log";
             if (!strcasecmp(preset, "ultralight"))
             {
                 strength[0] = 0.05; strength[1] = 0.025;
@@ -676,51 +673,50 @@ static hb_dict_t * generate_lapsharp_settings(const char *preset,
         }
         else if (!strcasecmp(tune, "animation"))
         {
-            strength[0]     = 0.15;   strength[1] = 0.09;
-            kernel_string[0] = strdup("isolap");
-            kernel_string[1] = strdup("isolap");
+            strength[0]      = 0.15; strength[1]   = 0.09;
+            kernel_string[0] = kernel_string[1]    = "isolap";
             if (!strcasecmp(preset, "ultralight"))
             {
-                strength[0] = 0.0375; strength[1] = 0.0225;
+                strength[0]  = 0.0375; strength[1] = 0.0225;
             }
             else if (!strcasecmp(preset, "light"))
             {
-                strength[0] = 0.075;  strength[1] = 0.05625;
+                strength[0]  = 0.075;  strength[1] = 0.05625;
             }
             else if (!strcasecmp(preset, "strong"))
             {
-                strength[0] = 0.225;  strength[1] = 0.15;
+                strength[0]  = 0.225;  strength[1] = 0.15;
             }
             else if (!strcasecmp(preset, "stronger"))
             {
-                strength[0] = 0.375;  strength[1] = 0.225;
+                strength[0]  = 0.375;  strength[1] = 0.225;
             }
         }
         else if (!strcasecmp(tune, "sprite"))
         {
-            strength[0]     = strength[1] = 0.15;
-            kernel_string[0] = strdup("lap");
-            kernel_string[1] = strdup("lap");
+            strength[0]      = strength[1]      = 0.15;
+            kernel_string[0] = kernel_string[1] = "lap";
             if (!strcasecmp(preset, "ultralight"))
             {
-                strength[0] = strength[1] = 0.0375;
+                strength[0]  = strength[1]      = 0.0375;
             }
             else if (!strcasecmp(preset, "light"))
             {
-                strength[0] = strength[1] = 0.075;
+                strength[0]  = strength[1]      = 0.075;
             }
             else if (!strcasecmp(preset, "strong"))
             {
-                strength[0] = strength[1] = 0.225;
+                strength[0]  = strength[1]      = 0.225;
             }
             else if (!strcasecmp(preset, "stronger"))
             {
-                strength[0] = strength[1] = 0.375;
+                strength[0]  = strength[1]      = 0.375;
             }
         }
         else
         {
             fprintf(stderr, "Unrecognized lapsharp tune (%s).\n", tune);
+            free(kernel_string);
             return NULL;
         }
 
@@ -730,6 +726,8 @@ static hb_dict_t * generate_lapsharp_settings(const char *preset,
 
         hb_dict_set(settings, "cb-strength", hb_value_double(strength[1]));
         hb_dict_set(settings, "cb-kernel",   hb_value_string(kernel_string[1]));
+
+        free(kernel_string);
     }
     else
     {

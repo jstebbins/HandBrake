@@ -18,10 +18,8 @@
 
 typedef struct
 {
-    double strength;       // strength
-    char  *kernel_string;  // which kernel to use (user string)
-
-    int    kernel;         // internal id; lapsharp_kernels[kernel]
+    double strength;  // strength
+    int    kernel;    // which kernel to use; lapsharp_kernels[kernel]
 } lapsharp_plane_context_t;
 
 typedef struct {
@@ -145,26 +143,28 @@ static int hb_lapsharp_init(hb_filter_object_t *filter,
     filter->private_data = calloc(sizeof(struct hb_filter_private_s), 1);
     hb_filter_private_t * pv = filter->private_data;
 
+    char *kernel_string[3];
+
     // Mark parameters unset
     for (int c = 0; c < 3; c++)
     {
-        pv->plane_ctx[c].strength      = -1;
-        pv->plane_ctx[c].kernel_string = NULL;
-        pv->plane_ctx[c].kernel        = -1;
+        pv->plane_ctx[c].strength = -1;
+        pv->plane_ctx[c].kernel   = -1;
+        kernel_string[c]          = NULL;
     }
 
     // Read user parameters
     if (filter->settings != NULL)
     {
         hb_dict_t * dict = filter->settings;
-        hb_dict_extract_double(&pv->plane_ctx[0].strength,      dict, "y-strength");
-        hb_dict_extract_string(&pv->plane_ctx[0].kernel_string, dict, "y-kernel");
+        hb_dict_extract_double(&pv->plane_ctx[0].strength, dict, "y-strength");
+        hb_dict_extract_string(&kernel_string[0],          dict, "y-kernel");
 
-        hb_dict_extract_double(&pv->plane_ctx[1].strength,      dict, "cb-strength");
-        hb_dict_extract_string(&pv->plane_ctx[1].kernel_string, dict, "cb-kernel");
+        hb_dict_extract_double(&pv->plane_ctx[1].strength, dict, "cb-strength");
+        hb_dict_extract_string(&kernel_string[1],          dict, "cb-kernel");
 
-        hb_dict_extract_double(&pv->plane_ctx[2].strength,      dict, "cr-strength");
-        hb_dict_extract_string(&pv->plane_ctx[2].kernel_string, dict, "cr-kernel");
+        hb_dict_extract_double(&pv->plane_ctx[2].strength, dict, "cr-strength");
+        hb_dict_extract_string(&kernel_string[2],          dict, "cr-kernel");
     }
 
     // Convert kernel user string to internal id
@@ -174,23 +174,25 @@ static int hb_lapsharp_init(hb_filter_object_t *filter,
 
         ctx->kernel = -1;
 
-        if (ctx->kernel_string == NULL)
+        if (kernel_string[c] == NULL)
         {
             continue;
         }
 
-        if (!strcasecmp(ctx->kernel_string, "lap"))
+        if (!strcasecmp(kernel_string[c], "lap"))
         {
             ctx->kernel = 0;
         }
-        else if (!strcasecmp(ctx->kernel_string, "isolap"))
+        else if (!strcasecmp(kernel_string[c], "isolap"))
         {
             ctx->kernel = 1;
         }
-        else if (!strcasecmp(ctx->kernel_string, "log"))
+        else if (!strcasecmp(kernel_string[c], "log"))
         {
             ctx->kernel = 2;
         }
+
+        free(kernel_string[c]);
     }
 
     // Cascade values
