@@ -47,6 +47,7 @@ void ghb_select_default_preset(signal_user_data_t *ud);
 void ghb_presets_list_init(signal_user_data_t *ud,
                            const hb_preset_index_t *path);
 void ghb_presets_menu_init(signal_user_data_t *ud);
+void ghb_preset_folders_menu_init(signal_user_data_t *ud);
 int ghb_find_pid_file();
 void ghb_write_pid_file();
 GhbValue* ghb_get_current_preset(signal_user_data_t *ud);

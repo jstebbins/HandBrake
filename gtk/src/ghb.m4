@@ -1539,6 +1539,52 @@ This is often the feature title of a DVD.</property>
                   </packing>
                 </child>
                 <child>
+                  <object class="GtkMenuButton" id="preset_folders_menu_button">
+                    <property name="visible">True</property>
+                    <property name="can_focus">False</property>
+                    <property name="direction">right</property>
+                    <child>
+                      <object class="GtkBox" id="preset_folders_menu_button_box">
+                        <property name="orientation">horizontal</property>
+                        <property name="visible">True</property>
+                        <property name="can_focus">False</property>
+                        <child>
+                          <object class="GtkLabel" id="preset_folders_menu_button_label">
+                            <property name="visible">True</property>
+                            <property name="can_focus">False</property>
+                            <property name="width-chars">20</property>
+                            <property name="xalign">0</property>
+                            <property name="label" translatable="yes">Choose Preset</property>
+                            <property name="use_markup">True</property>
+                          </object>
+                          <packing>
+                            <property name="expand">True</property>
+                            <property name="fill">True</property>
+                            <property name="position">0</property>
+                          </packing>
+                        </child>
+                        <child>
+                          <object class="GtkImage" id="preset_folders_menu_button_arrow">
+                            <property name="visible">True</property>
+                            <property name="can_focus">False</property>
+                            <property name="icon_name">pan-end-symbolic</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">1</property>
+                          </packing>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
+                    <property name="position">1</property>
+                  </packing>
+                </child>
+                <child>
                   <object class="GtkMenuButton" id="presets_menu_button">
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
@@ -1552,7 +1598,7 @@ This is often the feature title of a DVD.</property>
                           <object class="GtkLabel" id="presets_menu_button_label">
                             <property name="visible">True</property>
                             <property name="can_focus">False</property>
-                            <property name="width-chars">50</property>
+                            <property name="width-chars">30</property>
                             <property name="xalign">0</property>
                             <property name="label" translatable="yes">Choose Preset</property>
                             <property name="use_markup">True</property>
@@ -1581,7 +1627,7 @@ This is often the feature title of a DVD.</property>
                   <packing>
                     <property name="expand">False</property>
                     <property name="fill">True</property>
-                    <property name="position">1</property>
+                    <property name="position">2</property>
                   </packing>
                 </child>
                 <child>
@@ -1595,7 +1641,7 @@ This is often the feature title of a DVD.</property>
                   <packing>
                     <property name="expand">True</property>
                     <property name="fill">True</property>
-                    <property name="position">2</property>
+                    <property name="position">3</property>
                   </packing>
                 </child>
                 <child>
@@ -1612,7 +1658,7 @@ Modifications will be discarded.</property>
                   <packing>
                     <property name="expand">False</property>
                     <property name="fill">True</property>
-                    <property name="position">3</property>
+                    <property name="position">4</property>
                   </packing>
                 </child>
               </object>
