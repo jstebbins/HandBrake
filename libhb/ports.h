@@ -24,6 +24,35 @@
 #define IS_DIR_SEP(c) (c == '/')
 #endif
 
+#ifdef USE_QSV
+#include "mfx/mfxstructures.h"
+#ifdef SYS_LINUX
+#include <va/va_drm.h>
+#endif
+#endif
+
+/************************************************************************
+ * HW accel display
+ ***********************************************************************/
+#ifdef SYS_LINUX
+extern const char* DRM_INTEL_DRIVER_NAME;
+#endif // SYS_LINUX
+
+typedef struct
+{
+    void          * handle;
+#ifdef USE_QSV
+    mfxHandleType   mfxType;
+
+#ifdef SYS_LINUX
+    int             vaFd;
+    VADisplay       vaDisplay;
+#endif // SYS_LINUX
+#endif
+} hb_display_t;
+
+hb_display_t * hb_display_init(const char * name);
+void           hb_display_close(hb_display_t ** _d);
 
 /************************************************************************
  * CPU info utilities
