@@ -61,7 +61,11 @@ endif
 endif
 
 ifeq (1,$(FEATURE.qsv))
+ifeq (linux,$(BUILD.system))
+    MODULES += contrib/mediasdk
+else
     MODULES += contrib/libmfx
+endif
 endif
 
 ifeq (1,$(FEATURE.vce))

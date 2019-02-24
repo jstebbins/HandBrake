@@ -1,10 +1,17 @@
 __deps__ := BZIP2 ZLIB FDKAAC LIBVPX LAME LIBOPUS LIBSPEEX XZ
+
 ifeq (1,$(FEATURE.qsv))
+ifeq (linux,$(BUILD.system))
+__deps__ += MEDIASDK
+else
 __deps__ += LIBMFX
 endif
+endif
+
 ifeq (1,$(FEATURE.vce))
 __deps__ += AMF
 endif
+
 ifeq (1,$(FEATURE.nvenc))
 __deps__ += NVENC
 endif
