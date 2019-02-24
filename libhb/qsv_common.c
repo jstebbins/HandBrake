@@ -638,9 +638,12 @@ static int query_capabilities(mfxSession session, mfxVersion version, hb_qsv_inf
     return 0;
 }
 
+const char* DRM_INTEL_DRIVER_NAME = "i915";
+const char* VA_INTEL_DRIVER_NAME = "iHD";
+
 hb_display_t * hb_qsv_display_init(void)
 {
-    return hb_display_init(DRM_INTEL_DRIVER_NAME);
+    return hb_display_init(DRM_INTEL_DRIVER_NAME, VA_INTEL_DRIVER_NAME);
 }
 
 int hb_qsv_info_init()

@@ -51,7 +51,8 @@ typedef struct
 #endif
 } hb_display_t;
 
-hb_display_t * hb_display_init(const char * name);
+hb_display_t * hb_display_init(const char * driver_name,
+                               const char * interface_name);
 void           hb_display_close(hb_display_t ** _d);
 
 /************************************************************************
