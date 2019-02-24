@@ -30,6 +30,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "hb.h"
 #include "nal_units.h"
+#include "qsv_api.h"
 #include "qsv_common.h"
 #include "qsv_memory.h"
 #include "h264_common.h"

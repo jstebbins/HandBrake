@@ -16,6 +16,7 @@
 #include "ports.h"
 #include "common.h"
 #include "hb_dict.h"
+#include "qsv_api.h"
 #include "qsv_common.h"
 #include "h264_common.h"
 #include "h265_common.h"
@@ -649,6 +650,13 @@ int hb_qsv_info_init()
     if (init_done)
         return 0;
     init_done = 1;
+
+#ifdef USE_QSV_DLOPEN
+    if (hb_qsv_load_api() < 0)
+    {
+        return -1;
+    }
+#endif
 
     /*
      * First, check for any MSDK version to determine whether one or

@@ -11,5 +11,7 @@ LIBMFX.CONFIGURE.extra = --without-libva_drm --without-libva_x11
 endif
 
 ## optional static libs need to be marked
+ifneq (1,$(FEATURE.qsv_dll))
 LIBMFX.OSL.libs  = mfx
+endif
 LIBMFX.OSL.files = $(foreach i,$(LIBMFX.OSL.libs),$(call fn.ABSOLUTE,$(CONTRIB.build/)lib/lib$(i).a))

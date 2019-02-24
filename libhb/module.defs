@@ -81,6 +81,9 @@ endif
 
 ifeq (1,$(FEATURE.qsv))
     LIBHB.GCC.D += USE_QSV HAVE_THREADS=1
+ifeq (1,$(FEATURE.qsv_dll))
+    LIBHB.GCC.D += USE_QSV_DLOPEN
+endif
 endif
 
 ifeq (1,$(FEATURE.vce))
@@ -126,7 +129,9 @@ LIBHB.dll.libs += $(CONTRIB.build/)lib/libfdk-aac.a
 endif
 
 ifeq (1,$(FEATURE.qsv))
-LIBHB.dll.libs += $(CONTRIB.build/)lib/libmfx.a
+ifneq (1,$(FEATURE.qsv_dll))
+    LIBHB.dll.libs += $(CONTRIB.build/)lib/libmfx.a
+endif
 endif
 
 ifeq (1,$(FEATURE.x265))

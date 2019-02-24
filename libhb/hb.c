@@ -1663,12 +1663,10 @@ int hb_global_init()
     if (!disable_hardware) 
     {
         result = hb_qsv_info_init();
-        if (result < 0)
+        if (result == 0)
         {
-            hb_error("hb_qsv_info_init failed!");
-            return -1;
+            hb_param_configure_qsv();
         }
-        hb_param_configure_qsv();
     }
 #endif
 

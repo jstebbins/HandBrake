@@ -29,6 +29,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifdef USE_QSV
 
 #include "hbffmpeg.h"
+#include "qsv_api.h"
 #include "qsv_libav.h"
 
 int hb_qsv_get_free_encode_task(hb_qsv_list * tasks)
