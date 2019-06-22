@@ -3698,6 +3698,12 @@ start_new_log(signal_user_data_t *ud, GhbValue *uiDict)
     gchar *log_path, *pos, *basename, *dest_dir;
     const gchar *destname;
 
+    // queue_activity_buffer is about to be reused, make sure
+    // queue is showing the correct buffer
+    ghb_queue_select_log(ud);
+    // Erase current contents of queue activity
+    gtk_text_buffer_set_text(ud->queue_activity_buffer, "", 0);
+
     _now = time(NULL);
     now = localtime(&_now);
     destname = ghb_dict_get_string(uiDict, "destination");
@@ -4291,23 +4297,16 @@ ghb_timer_cb(gpointer data)
 }
 
 static void
-append_activity(signal_user_data_t * ud,
-                const char * scroll, const char * view,
-                const char * text, gsize length)
+append_activity(GtkTextBuffer * tb, const char * text, gsize length)
 {
     if (text == NULL || length <= 0)
     {
         return;
     }
-    GtkTextView   * textview;
-    GtkTextBuffer * buffer;
     GtkTextIter     iter;
 
-    textview = GTK_TEXT_VIEW(GHB_WIDGET(ud->builder, view));
-    buffer   = gtk_text_view_get_buffer (textview);
-    gtk_text_buffer_get_end_iter(buffer, &iter);
-
-    gtk_text_buffer_insert(buffer, &iter, text, -1);
+    gtk_text_buffer_get_end_iter(tb, &iter);
+    gtk_text_buffer_insert(tb, &iter, text, -1);
 }
 
 G_MODULE_EXPORT gboolean
@@ -4334,14 +4333,8 @@ ghb_log_cb(GIOChannel *source, GIOCondition cond, gpointer data)
         if (utf8_text != NULL)
         {
             // Write to activity windows
-            append_activity(ud, "activity_scroll", "activity_view",
-                            utf8_text, length);
-            if (ud->append_queue_activity)
-            {
-                append_activity(ud,
-                                "queue_activity_scroll", "queue_activity_view",
-                                utf8_text, length);
-            }
+            append_activity(ud->activity_buffer, utf8_text, length);
+            append_activity(ud->queue_activity_buffer, utf8_text, length);
 
             // Write log files
 #if defined(_WIN32)

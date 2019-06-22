@@ -444,47 +444,124 @@ queue_update_summary(GhbValue * queueDict, signal_user_data_t *ud)
     g_free(text);
 }
 
+#define ACTIVITY_MAX_READ_SZ (1024*1024)
+static void read_log(signal_user_data_t * ud, const char * log_path)
+{
+    FILE        * f;
+    size_t        size, req_size;
+    GtkTextIter   iter;
+    char        * buf;
+
+    if (ud->extra_activity_path != NULL &&
+        !strcmp(ud->extra_activity_path, log_path))
+    {
+        return;
+    }
+    g_free(ud->extra_activity_path);
+    ud->extra_activity_path = g_strdup(log_path);
+
+    gtk_text_buffer_set_text(ud->extra_activity_buffer, "", 0);
+
+    f = g_fopen(log_path, "r");
+    if (f == NULL)
+    {
+        return;
+    }
+    fseek(f, 0, SEEK_END);
+    req_size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if (req_size > ACTIVITY_MAX_READ_SZ)
+    {
+        req_size = ACTIVITY_MAX_READ_SZ;
+    }
+    buf = g_malloc(size);
+    while (!feof(f))
+    {
+        size = fread(buf, 1, size, f);
+        if (size <= 0)
+        {
+            break;
+        }
+        gtk_text_buffer_get_end_iter(ud->extra_activity_buffer, &iter);
+        gtk_text_buffer_insert(ud->extra_activity_buffer, &iter, buf, size);
+    }
+    fclose(f);
+    g_free(buf);
+}
+
+void ghb_queue_select_log(signal_user_data_t * ud)
+{
+    GtkListBox    * lb;
+    GtkListBoxRow * row;
+    GtkTextBuffer * current;
+    gint            index;
+    GhbValue      * queueDict, *uiDict;
+
+    lb = GTK_LIST_BOX(GHB_WIDGET(ud->builder, "queue_list"));
+    row = gtk_list_box_get_selected_row(lb);
+    if (row != NULL)
+    {
+        GtkTextView * tv;
+
+        index = gtk_list_box_row_get_index(row);
+        if (index < 0 || index >= ghb_array_len(ud->queue))
+        {
+            return;
+        }
+        queueDict = ghb_array_get(ud->queue, index);
+        uiDict = ghb_dict_get(queueDict, "uiSettings");
+        tv = GTK_TEXT_VIEW(GHB_WIDGET(ud->builder, "queue_activity_view"));
+        current = gtk_text_view_get_buffer(tv);
+        if (ghb_dict_get_int(uiDict, "job_status") == GHB_QUEUE_RUNNING)
+        {
+            if (ud->queue_activity_buffer != current)
+            {
+                gtk_text_view_set_buffer(tv, ud->queue_activity_buffer);
+            }
+        }
+        else
+        {
+            GtkWidget  * queue_log;
+            const char * log_path;
+
+            queue_log = GHB_WIDGET(ud->builder, "queue_log_tab");
+            if (ud->extra_activity_buffer != current)
+            {
+                gtk_text_view_set_buffer(tv, ud->extra_activity_buffer);
+            }
+            log_path = ghb_dict_get_string(uiDict, "ActivityFilename");
+            if (log_path != NULL)
+            {
+                gtk_widget_set_visible(queue_log, TRUE);
+                ghb_ui_update(ud, "queue_activity_location",
+                              ghb_string_value(log_path));
+                read_log(ud, log_path);
+            }
+            else
+            {
+                gtk_widget_set_visible(queue_log, FALSE);
+            }
+        }
+    }
+}
+
 G_MODULE_EXPORT void
 queue_list_selection_changed_cb(GtkListBox *box, GtkListBoxRow *row,
                                 signal_user_data_t *ud)
 {
-    GtkWidget * queue_log;
-    GtkWidget * widget;
     GhbValue  * queueDict = NULL;
     int         index = -1;
 
     if (row != NULL)
     {
-        index     = gtk_list_box_row_get_index(row);
+        index = gtk_list_box_row_get_index(row);
     }
-    queue_log = GHB_WIDGET(ud->builder, "queue_log_tab");
     if (index >= 0 && index < ghb_array_len(ud->queue))
     {
-        const gchar * log_path;
-        GhbValue    * uiDict;
-
         queueDict = ghb_array_get(ud->queue, index);
-        uiDict = ghb_dict_get(queueDict, "uiSettings");
-        ud->append_queue_activity =
-            ghb_dict_get_int(uiDict, "job_status") == GHB_QUEUE_RUNNING;
-        log_path = ghb_dict_get_string(uiDict, "ActivityFilename");
-        if (log_path != NULL)
-        {
-            gtk_widget_set_visible(queue_log, TRUE);
-            ghb_ui_update(ud, "queue_activity_location",
-                          ghb_string_value(log_path));
-        }
-        else
-        {
-            gtk_widget_set_visible(queue_log, FALSE);
-        }
-    }
-    else
-    {
-        ud->append_queue_activity = FALSE;
-        gtk_widget_set_visible(queue_log, FALSE);
     }
     queue_update_summary(queueDict, ud);
+    ghb_queue_select_log(ud);
     ghb_queue_buttons_grey(ud);
 }
 

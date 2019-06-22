@@ -983,6 +983,15 @@ ghb_activate_cb(GApplication * app, signal_user_data_t * ud)
     gtk_widget_hide(widget);
 #endif
 
+    // Get GtkTextBuffers for activity logs
+    widget = GHB_WIDGET(ud->builder, "activity_view");
+    ud->activity_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(widget));
+    g_object_ref(ud->activity_buffer);
+    widget = GHB_WIDGET(ud->builder, "queue_activity_view");
+    ud->queue_activity_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(widget));
+    g_object_ref(ud->queue_activity_buffer);
+    ud->extra_activity_buffer = gtk_text_buffer_new(NULL);
+
     // Must set the names of the widgets that I want to modify
     // style for.
     gtk_widget_set_name(GHB_WIDGET(ud->builder, "preview_hud"), "preview_hud");
@@ -1318,6 +1327,11 @@ main(int argc, char *argv[])
 
     if (ud->builder != NULL)
         g_object_unref(ud->builder);
+
+    g_object_unref(ud->extra_activity_buffer);
+    g_object_unref(ud->queue_activity_buffer);
+    g_object_unref(ud->activity_buffer);
+    g_free(ud->extra_activity_path);
 
     g_free(ud->current_dvd_device);
     g_free(ud);
