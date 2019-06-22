@@ -70,6 +70,7 @@ typedef struct
     GhbValue            * queue;
     GIOChannel          * activity_log;
     GIOChannel          * job_activity_log;
+    gboolean              append_queue_activity;
     preview_t           * preview;
     gchar               * appcast;
     gint                  appcast_len;
