@@ -137,9 +137,42 @@ queue_update_summary(GhbValue * queueDict, signal_user_data_t *ud)
     ctext = ghb_dict_get_string(uiDict, "destination");
     str = g_string_new(ctext);
 
-    if (ghb_dict_get_bool(uiDict, "ChapterMarkers"))
+    const char           * mux_name;
+    const hb_container_t * container;
+
+    mux_name  = ghb_dict_get_string(uiDict, "FileFormat");
+    container = ghb_lookup_container_by_name(mux_name);
+    g_string_append_printf(str, "\n%s", container->name);
+
+    gboolean markers, av_align, ipod = FALSE, http = FALSE;
+    markers  = ghb_dict_get_bool(uiDict, "ChapterMarkers");
+    av_align = ghb_dict_get_bool(uiDict, "AlignAVStart");
+    if (container->format & HB_MUX_MASK_MP4)
     {
-        g_string_append_printf(str, "\nChapter Markers");
+        ipod = ghb_dict_get_bool(uiDict, "Mp4iPodCompatible");
+        http = ghb_dict_get_bool(uiDict, "Mp4HttpOptimize");
+    }
+
+    sep = "\n";
+    if (markers)
+    {
+        g_string_append_printf(str, "%s%s", sep, "Chapter Markers");
+        sep = ", ";
+    }
+    if (av_align)
+    {
+        g_string_append_printf(str, "%s%s", sep, "Align A/V");
+        sep = ", ";
+    }
+    if (http)
+    {
+        g_string_append_printf(str, "%s%s", sep, "Web Optimized");
+        sep = ", ";
+    }
+    if (ipod)
+    {
+        g_string_append_printf(str, "%s%s", sep, "iPod 5G");
+        sep = ", ";
     }
 
     text = g_string_free(str, FALSE);
@@ -150,6 +183,7 @@ queue_update_summary(GhbValue * queueDict, signal_user_data_t *ud)
     // Dimenstions
     double display_width;
     int    width, height, display_height, par_width, par_height;
+    int    crop[4];
     char * display_aspect;
 
     width          = ghb_dict_get_int(uiDict, "scale_width");
@@ -158,15 +192,22 @@ queue_update_summary(GhbValue * queueDict, signal_user_data_t *ud)
     display_height = ghb_dict_get_int(uiDict, "PictureDisplayHeight");
     par_width      = ghb_dict_get_int(uiDict, "PicturePARWidth");
     par_height     = ghb_dict_get_int(uiDict, "PicturePARHeight");
+    crop[0]        = ghb_dict_get_int(uiDict, "PictureTopCrop");
+    crop[1]        = ghb_dict_get_int(uiDict, "PictureBottomCrop");
+    crop[2]        = ghb_dict_get_int(uiDict, "PictureLeftCrop");
+    crop[3]        = ghb_dict_get_int(uiDict, "PictureRightCrop");
+
 
     display_width = (double)width * par_width / par_height;
     display_aspect = ghb_get_display_aspect_string(display_width,
                                                    display_height);
 
     display_width  = ghb_dict_get_int(uiDict, "PictureDisplayWidth");
-    text = g_strdup_printf("%dx%d storage, %dx%d display\n"
+    text = g_strdup_printf("%d:%d:%d:%d Crop\n"
+                           "%dx%d storage, %dx%d display\n"
                            "%d:%d Pixel Aspect Ratio\n"
                             "%s Display Aspect Ratio",
+                           crop[0], crop[1], crop[2], crop[3], 
                            width, height, (int)display_width, display_height,
                            par_width, par_height, display_aspect);
     widget = GHB_WIDGET(ud->builder, "queue_summary_dimensions");
@@ -180,9 +221,83 @@ queue_update_summary(GhbValue * queueDict, signal_user_data_t *ud)
     const hb_rate_t    * fps;
     hb_rational_t        vrate;
     char               * rate_str;
+    gboolean             two_pass, vqtype;
 
     str = g_string_new("");
     video_encoder = ghb_settings_video_encoder(uiDict, "VideoEncoder");
+    vqtype = ghb_dict_get_bool(uiDict, "vquality_type_constant");
+    two_pass = ghb_dict_get_bool(uiDict, "VideoTwoPass");
+
+    if (!vqtype)
+    {
+        // ABR
+        int br = ghb_dict_get_int(uiDict, "VideoAvgBitrate");
+        if (!two_pass)
+        {
+            g_string_append_printf(str, "%s, Bitrate %dkbps",
+                                   video_encoder->name, br);
+        }
+        else
+        {
+            g_string_append_printf(str, "%s, Bitrate %dkbps (2 Pass)",
+                                   video_encoder->name, br);
+        }
+    }
+    else
+    {
+        gdouble quality = ghb_dict_get_double(uiDict, "VideoQualitySlider");
+        g_string_append_printf(str, "%s, Constant Quality %.4g(%s)",
+                               video_encoder->name, quality,
+                               hb_video_quality_get_name(video_encoder->codec));
+    }
+    const char * enc_preset  = NULL;
+    const char * enc_tune    = NULL;
+    const char * enc_level   = NULL;
+    const char * enc_profile = NULL;
+
+    if (hb_video_encoder_get_presets(video_encoder->codec) != NULL)
+    {
+        // The encoder supports presets
+        enc_preset  = ghb_dict_get_string(uiDict, "VideoPreset");
+    }
+    if (hb_video_encoder_get_tunes(video_encoder->codec) != NULL)
+    {
+        // The encoder supports tunes
+        enc_tune    = ghb_dict_get_string(uiDict, "VideoTune");
+    }
+    if (hb_video_encoder_get_profiles(video_encoder->codec) != NULL)
+    {
+        // The encoder supports profiles
+        enc_profile = ghb_dict_get_string(uiDict, "VideoProfile");
+    }
+    if (hb_video_encoder_get_levels(video_encoder->codec) != NULL)
+    {
+        // The encoder supports levels
+        enc_level   = ghb_dict_get_string(uiDict, "VideoLevel");
+    }
+
+    sep = "\n";
+    if (enc_preset != NULL)
+    {
+        g_string_append_printf(str, "%sPreset %s", sep, enc_preset);
+        sep = ", ";
+    }
+    if (enc_tune != NULL)
+    {
+        g_string_append_printf(str, "%sTune %s", sep, enc_tune);
+        sep = ", ";
+    }
+    if (enc_profile != NULL)
+    {
+        g_string_append_printf(str, "%sProfile %s", sep, enc_profile);
+        sep = ", ";
+    }
+    if (enc_level != NULL)
+    {
+        g_string_append_printf(str, "%sLevel %s", sep, enc_level);
+        sep = ", ";
+    }
+
     fps = ghb_settings_video_framerate(uiDict, "VideoFramerate");
     if (fps->rate == 0)
     {
@@ -194,20 +309,20 @@ queue_update_summary(GhbValue * queueDict, signal_user_data_t *ud)
         vrate.den = fps->rate;
     }
     rate_str = g_strdup_printf("%.6g", (gdouble)vrate.num / vrate.den);
-    g_string_append_printf(str, "%s, %s FPS", video_encoder->name, rate_str);
-    g_free(rate_str);
     if (ghb_dict_get_bool(uiDict, "VideoFramerateCFR"))
     {
-        g_string_append_printf(str, " CFR");
+        g_string_append_printf(str, "\nConstant Framerate %s fps", rate_str);
     }
     else if (ghb_dict_get_bool(uiDict, "VideoFrameratePFR"))
     {
-        g_string_append_printf(str, " PFR");
+        g_string_append_printf(str, "\nPeak Framerate %s fps (may be lower)",
+                               rate_str);
     }
     else if (ghb_dict_get_bool(uiDict, "VideoFramerateVFR"))
     {
-        g_string_append_printf(str, " VFR");
+        g_string_append_printf(str, "\nVariable Framerate %s fps", rate_str);
     }
+    g_free(rate_str);
 
     // Append Filters to video summary
     gboolean     detel, comb_detect, deint, decomb, deblock, nlmeans, denoise;
