@@ -580,6 +580,11 @@ static void read_log(signal_user_data_t * ud, const char * log_path)
     g_free(buf);
 }
 
+// Display/Hide queue activity log pane
+// Choose buffer to display. Queue logs use 1 of 2 available buffers
+//      queue_activity_buffer - live buffer, updated as encode proceeds
+//      extra_activity_buffer - non-live buffer, populated from log file
+// If showing non-live buffer, read log file into buffer
 void ghb_queue_select_log(signal_user_data_t * ud)
 {
     GtkListBox    * lb;
@@ -587,24 +592,31 @@ void ghb_queue_select_log(signal_user_data_t * ud)
     GtkTextBuffer * current;
     gint            index;
     GhbValue      * queueDict, *uiDict;
+    GtkWidget     * queue_log_tab;
 
-    lb = GTK_LIST_BOX(GHB_WIDGET(ud->builder, "queue_list"));
-    row = gtk_list_box_get_selected_row(lb);
+    queue_log_tab = GHB_WIDGET(ud->builder, "queue_log_tab");
+    lb            = GTK_LIST_BOX(GHB_WIDGET(ud->builder, "queue_list"));
+    row           = gtk_list_box_get_selected_row(lb);
     if (row != NULL)
     {
+        // There is a queue list row selected
         GtkTextView * tv;
 
         index = gtk_list_box_row_get_index(row);
         if (index < 0 || index >= ghb_array_len(ud->queue))
-        {
+        { // Should never happen
             return;
         }
         queueDict = ghb_array_get(ud->queue, index);
         uiDict = ghb_dict_get(queueDict, "uiSettings");
+        // Get the current buffer that is displayed in the queue log
         tv = GTK_TEXT_VIEW(GHB_WIDGET(ud->builder, "queue_activity_view"));
         current = gtk_text_view_get_buffer(tv);
         if (ghb_dict_get_int(uiDict, "job_status") == GHB_QUEUE_RUNNING)
         {
+            // Selected encode is running, enable display of log and
+            // show the live buffer
+            gtk_widget_set_visible(queue_log_tab, TRUE);
             if (ud->queue_activity_buffer != current)
             {
                 gtk_text_view_set_buffer(tv, ud->queue_activity_buffer);
@@ -612,10 +624,10 @@ void ghb_queue_select_log(signal_user_data_t * ud)
         }
         else
         {
-            GtkWidget  * queue_log;
             const char * log_path;
 
-            queue_log = GHB_WIDGET(ud->builder, "queue_log_tab");
+            // Selected encode is pending/finished/canceled/failed
+            // use non-live buffer (aka extra) to display log
             if (ud->extra_activity_buffer != current)
             {
                 gtk_text_view_set_buffer(tv, ud->extra_activity_buffer);
@@ -623,16 +635,24 @@ void ghb_queue_select_log(signal_user_data_t * ud)
             log_path = ghb_dict_get_string(uiDict, "ActivityFilename");
             if (log_path != NULL)
             {
-                gtk_widget_set_visible(queue_log, TRUE);
+                // enable display of log and read log into display buffer
+                gtk_widget_set_visible(queue_log_tab, TRUE);
                 ghb_ui_update(ud, "queue_activity_location",
                               ghb_string_value(log_path));
                 read_log(ud, log_path);
             }
             else
             {
-                gtk_widget_set_visible(queue_log, FALSE);
+                // No log file, encode is pending
+                // disable display of log
+                gtk_widget_set_visible(queue_log_tab, FALSE);
             }
         }
+    }
+    else
+    {
+        // No row selected, disable display of log
+        gtk_widget_set_visible(queue_log_tab, FALSE);
     }
 }
 
