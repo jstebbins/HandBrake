@@ -39,6 +39,7 @@ void     ghb_queue_progress_set_visible(signal_user_data_t *ud, int index,
 void     ghb_queue_progress_set_fraction(signal_user_data_t *ud, int index,
                                          gdouble frac);
 void     ghb_queue_update_status(signal_user_data_t *ud, int index, int status);
+void     ghb_queue_update_status_icon(signal_user_data_t *ud, int index);
 void     ghb_queue_select_log(signal_user_data_t * ud);
 
 #endif // _QUEUEHANDLER_H_

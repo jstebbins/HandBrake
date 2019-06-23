@@ -474,10 +474,10 @@ static void read_log(signal_user_data_t * ud, const char * log_path)
     {
         req_size = ACTIVITY_MAX_READ_SZ;
     }
-    buf = g_malloc(size);
+    buf = g_malloc(req_size);
     while (!feof(f))
     {
-        size = fread(buf, 1, size, f);
+        size = fread(buf, 1, req_size, f);
         if (size <= 0)
         {
             break;
@@ -640,20 +640,29 @@ add_to_queue_list(signal_user_data_t *ud, GhbValue *queueDict)
     hbox = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6));
 
     status_icon = gtk_image_new_from_icon_name("hb-source",
-                                               GTK_ICON_SIZE_SMALL_TOOLBAR);
+                                               GTK_ICON_SIZE_BUTTON);
     gtk_widget_set_name(status_icon, "queue_item_status");
+    gtk_image_set_pixel_size(GTK_IMAGE(status_icon), 16);
+    gtk_widget_set_hexpand(status_icon, FALSE);
 
     dest       = ghb_dict_get_string(uiDict, "destination");
     basename   = g_path_get_basename(dest);
     dest_label = gtk_label_new(basename);
-    gtk_widget_set_name(dest_label, "queue_item_dest");
     g_free(basename);
+    gtk_widget_set_name(dest_label, "queue_item_dest");
+    gtk_widget_set_hexpand(dest_label, TRUE);
+    gtk_widget_set_halign(dest_label, GTK_ALIGN_FILL);
+    gtk_label_set_justify(GTK_LABEL(dest_label), GTK_JUSTIFY_LEFT);
+    gtk_label_set_xalign(GTK_LABEL(dest_label), 0.0);
+    gtk_label_set_max_width_chars(GTK_LABEL(dest_label), 50);
+    gtk_label_set_ellipsize(GTK_LABEL(dest_label), PANGO_ELLIPSIZE_END);
 
     delete_button = gtk_button_new_from_icon_name("hb-remove",
-                                               GTK_ICON_SIZE_SMALL_TOOLBAR);
+                                               GTK_ICON_SIZE_BUTTON);
     gtk_button_set_relief(GTK_BUTTON(delete_button), GTK_RELIEF_NONE);
     g_signal_connect(delete_button, "clicked",
                      (GCallback)queue_remove_clicked_cb, ud);
+    gtk_widget_set_hexpand(delete_button, FALSE);
 
     progress = gtk_progress_bar_new();
     gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(progress), 0.0);
@@ -725,7 +734,7 @@ ghb_queue_progress_set_fraction(signal_user_data_t *ud, int index, gdouble frac)
 }
 
 void
-ghb_queue_update_status(signal_user_data_t *ud, int index, int status)
+ghb_queue_update_status_icon(signal_user_data_t *ud, int index)
 {
     int count = ghb_array_len(ud->queue);
     if (index < 0 || index >= count)
@@ -746,17 +755,15 @@ ghb_queue_update_status(signal_user_data_t *ud, int index, int status)
         return;
     }
 
-    if (ghb_dict_get_int(uiDict, "job_status") == GHB_QUEUE_RUNNING)
-    {
-        return; // Never change the status of currently running jobs
-    }
-
-    ghb_dict_set_int(uiDict, "job_status", status);
+    int status = ghb_dict_get_int(uiDict, "job_status");
 
     // Now update the UI
     const char * icon_name;
     switch (status)
     {
+        case GHB_QUEUE_RUNNING:
+             icon_name = "hb-start";
+            break;
         case GHB_QUEUE_PENDING:
              icon_name = "hb-source";
             break;
@@ -787,7 +794,38 @@ ghb_queue_update_status(signal_user_data_t *ud, int index, int status)
         return;
     }
     gtk_image_set_from_icon_name(status_icon, icon_name,
-                                 GTK_ICON_SIZE_SMALL_TOOLBAR);
+                                 GTK_ICON_SIZE_BUTTON);
+}
+
+void
+ghb_queue_update_status(signal_user_data_t *ud, int index, int status)
+{
+    int count = ghb_array_len(ud->queue);
+    if (index < 0 || index >= count)
+    {
+        // invalid index
+        return;
+    }
+
+    GhbValue * queueDict, * uiDict;
+    queueDict = ghb_array_get(ud->queue, index);
+    if (queueDict == NULL) // should never happen
+    {
+        return;
+    }
+    uiDict    = ghb_dict_get(queueDict, "uiSettings");
+    if (uiDict == NULL) // should never happen
+    {
+        return;
+    }
+
+    if (ghb_dict_get_int(uiDict, "job_status") == GHB_QUEUE_RUNNING)
+    {
+        return; // Never change the status of currently running jobs
+    }
+
+    ghb_dict_set_int(uiDict, "job_status", status);
+    ghb_queue_update_status_icon(ud, index);
 }
 
 void

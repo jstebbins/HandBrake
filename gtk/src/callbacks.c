@@ -4190,7 +4190,7 @@ ghb_backend_events(signal_user_data_t *ud)
             GhbValue *uiDict = ghb_dict_get(queueDict, "uiSettings");
             ghb_dict_set_int(uiDict, "job_status", qstatus);
         }
-        ghb_queue_update_status(ud, index, qstatus);
+        ghb_queue_update_status_icon(ud, index);
         gtk_progress_bar_set_fraction(progress, 1.0);
         ghb_queue_progress_set_fraction(ud, index, 1.0);
 
