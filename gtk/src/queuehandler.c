@@ -305,21 +305,16 @@ queue_update_summary(GhbValue * queueDict, signal_user_data_t *ud)
     gtk_label_set_text(GTK_LABEL(widget), text);
     g_free(text);
 
-    // Audio Tracks (show at most 3 tracks)
     GhbValue * audioList;
     GhbValue * sourceAudioList;
-    int        ii, count, show;
+    int        ii, count;
 
-    sep = "";
-    str = g_string_new("");
+    sep             = "";
+    str             = g_string_new("");
     sourceAudioList = ghb_dict_get(titleDict, "AudioList");
-    audioList    = ghb_get_job_audio_list(queueDict);
-    show = count = ghb_array_len(audioList);
-    if (count > 4)
-    {
-        show = 3;
-    }
-    for (ii = 0; ii < show; ii++)
+    audioList       = ghb_get_job_audio_list(queueDict);
+    count           = ghb_array_len(audioList);
+    for (ii = 0; ii < count; ii++)
     {
         GhbValue           * asettings, * asource;
         const hb_mixdown_t * audio_mix;
@@ -345,36 +340,26 @@ queue_update_summary(GhbValue * queueDict, signal_user_data_t *ud)
         }
         sep = "\n";
     }
-    if (show < count)
-    {
-        g_string_append_printf(str, "%s+ %d more audio track%s", sep,
-                               count - show, count - show > 1 ? "s" : "");
-    }
 
     text = g_string_free(str, FALSE);
     widget = GHB_WIDGET(ud->builder, "queue_summary_audio");
     gtk_label_set_text(GTK_LABEL(widget), text);
     g_free(text);
 
-    // Subtitle Tracks (show at most 3 tracks)
     GhbValue * subtitleDict;
     GhbValue * searchDict;
     GhbValue * subtitleList;
     GhbValue * sourceSubtitleList;
     gboolean   search;
 
-    sep = "";
-    str = g_string_new("");
+    sep                = "";
+    str                = g_string_new("");
     sourceSubtitleList = ghb_dict_get(titleDict, "SubtitleList");
     subtitleDict       = ghb_get_job_subtitle_settings(queueDict);
     subtitleList       = ghb_dict_get(subtitleDict, "SubtitleList");
     searchDict         = ghb_dict_get(subtitleDict, "Search");
     search             = ghb_dict_get_bool(searchDict, "Enable");
-    show = count       = ghb_array_len(subtitleList) + search;
-    if (count > 4)
-    {
-        show = 3;
-    }
+    count              = ghb_array_len(subtitleList);
     if (search)
     {
         gboolean force, burn, def;
@@ -396,11 +381,9 @@ queue_update_summary(GhbValue * queueDict, signal_user_data_t *ud)
         {
             g_string_append_printf(str, ", Default");
         }
-        show--;
-        count--;
         sep = "\n";
     }
-    for (ii = 0; ii < show; ii++)
+    for (ii = 0; ii < count; ii++)
     {
         GhbValue           * subsettings, * subsource;
         int                  track;
@@ -429,13 +412,6 @@ queue_update_summary(GhbValue * queueDict, signal_user_data_t *ud)
             g_string_append_printf(str, ", Default");
         }
         sep = "\n";
-    }
-    if (show < count)
-    {
-        g_string_append_printf(str, "%s+ %d more subtitle track%s",
-                               sep,
-                               count - show,
-                               count - show > 1 ? "s" : "");
     }
 
     text = g_string_free(str, FALSE);
