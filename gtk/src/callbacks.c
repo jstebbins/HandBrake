@@ -4143,6 +4143,7 @@ ghb_backend_events(signal_user_data_t *ud)
         // happens fast enough that it can be missed
         gtk_label_set_text(work_status, _("Scanning ..."));
         gtk_progress_bar_set_fraction(progress, 0);
+        ghb_queue_progress_set_fraction(ud, index, 0);
     }
     else if (status.queue.state & GHB_STATE_SCANDONE)
     {

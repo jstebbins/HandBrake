@@ -373,7 +373,7 @@ conjunction with the "Forced" option.</property>
           </packing>
         </child>
         <child>
-          <object class="GtkBox" id="queue_box1">
+          <object class="GtkPaned" id="queue_box1">
             <property name="orientation">horizontal</property>
             <property name="visible">True</property>
             <property name="can_focus">False</property>
@@ -498,6 +498,7 @@ conjunction with the "Forced" option.</property>
                 </child>
                 <child>
                   <object class="GtkScrolledWindow" id="queue_list_window">
+                    <property name="hexpand">True</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="hscrollbar_policy">GTK_POLICY_NEVER</property>
@@ -561,7 +562,7 @@ conjunction with the "Forced" option.</property>
                 </child>
               </object>
               <packing>
-                <property name="position">0</property>
+                <property name="shrink">False</property>
               </packing>
             </child>
             <child>
@@ -712,6 +713,7 @@ Resets the queue job to pending and ready to run again.</property>
                             <property name="vexpand">True</property>
                             <property name="hscrollbar-policy">GTK_POLICY_NEVER</property>
                             <property name="valign">GTK_ALIGN_FILL</property>
+                            <property name="margin-bottom">12</property>
                             <child>
                               <object class="GtkGrid" id="queue_summary_grid">
                                 <property name="visible">True</property>
@@ -1083,7 +1085,7 @@ Resets the queue job to pending and ready to run again.</property>
                 </child>
               </object>
               <packing>
-                <property name="position">1</property>
+                <property name="shrink">False</property>
               </packing>
             </child>
           </object>
