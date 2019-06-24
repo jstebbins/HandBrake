@@ -336,18 +336,35 @@ conjunction with the "Forced" option.</property>
             <property name="orientation">horizontal</property>
             <property name="visible">True</property>
             <property name="can_focus">False</property>
+            <property name="margin-top">12</property>
+            <property name="margin-bottom">12</property>
             <property name="events">GDK_POINTER_MOTION_MASK | GDK_POINTER_MOTION_HINT_MASK | GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK</property>
             <child>
-              <object class="GtkLabel" id="queue_status_label">
+              <object class="GtkLabel" id="queue_label">
                 <property name="visible">True</property>
-                <property name="hexpand">True</property>
+                <property name="hexpand">False</property>
                 <property name="can_focus">False</property>
                 <property name="halign">start</property>
                 <property name="use_markup">True</property>
-                <property name="label" translatable="yes">0 jobs pending</property>
+                <property name="margin-start">12</property>
+                <property name="label" translatable="yes">&lt;span size="x-large"&gt;Queue&lt;/span&gt;</property>
               </object>
               <packing>
                 <property name="position">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkLabel" id="queue_status_label">
+                <property name="visible">True</property>
+                <property name="hexpand">False</property>
+                <property name="can_focus">False</property>
+                <property name="halign">start</property>
+                <property name="use_markup">True</property>
+                <property name="margin-start">12</property>
+                <property name="label" translatable="yes">0 jobs pending</property>
+              </object>
+              <packing>
+                <property name="position">1</property>
               </packing>
             </child>
           </object>
@@ -366,53 +383,112 @@ conjunction with the "Forced" option.</property>
                 <property name="orientation">vertical</property>
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
+                <property name="hexpand">True</property>
                 <property name="events">GDK_POINTER_MOTION_MASK | GDK_POINTER_MOTION_HINT_MASK | GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK</property>
                 <child>
-                  <object class="GtkBox" id="queue_box3">
-                    <property name="orientation">horizontal</property>
+                  <object class="GtkToolbar" id="queue_list_toolbar">
+                    <property name="hexpand">True</property>
+                    <property name="halign">fill</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="events">GDK_POINTER_MOTION_MASK | GDK_POINTER_MOTION_HINT_MASK | GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK</property>
                     <child>
-                      <object class="GtkMenuButton" id="queue_options_menu_button">
+                      <object class="GtkToolButton" id="queue_list_start">
                         <property name="visible">True</property>
-                        <property name="can_focus">False</property>
-                        <property name="direction">down</property>
-                        <property name="menu-model">queue_options_menu</property>
+                        <property name="can_focus">True</property>
+                        <property name="events">GDK_POINTER_MOTION_MASK | GDK_POINTER_MOTION_HINT_MASK | GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK</property>
+                        <property name="tooltip_text" translatable="yes">Start Encoding</property>
+                        <property name="is_important">True</property>
+                        <property name="label" translatable="yes">Start</property>
+                        <property name="icon_name">hb-start</property>
+                        <property name="action-name">app.queue-start</property>
+                      </object>
+                      <packing>
+                        <property name="homogeneous">True</property>
+                        <property name="expand">False</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkToolButton" id="queue_list_pause">
+                        <property name="visible">True</property>
+                        <property name="can_focus">True</property>
+                        <property name="events">GDK_POINTER_MOTION_MASK | GDK_POINTER_MOTION_HINT_MASK | GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK</property>
+                        <property name="tooltip_text" translatable="yes">Pause Encoding</property>
+                        <property name="is_important">True</property>
+                        <property name="label" translatable="yes">Pause</property>
+                        <property name="icon_name">hb-pause</property>
+                        <property name="action-name">app.queue-pause</property>
+                      </object>
+                      <packing>
+                        <property name="homogeneous">True</property>
+                        <property name="expand">False</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkSeparatorToolItem" id="queue_list_tool_sep1">
+                        <property name="visible">True</property>
+                        <property name="draw">False</property>
+                        <property name="hexpand">True</property>
+                        <property name="halign">GTK_ALIGN_FILL</property>
+                        <property name="vexpand">False</property>
+                        <property name="valign">GTK_ALIGN_FILL</property>
+                      </object>
+                      <packing>
+                        <property name="expand">True</property>
+                        <property name="homogeneous">False</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkToolItem" id="queue_list_options">
+                        <property name="visible">True</property>
+                        <property name="can_focus">True</property>
+                        <property name="events">GDK_POINTER_MOTION_MASK | GDK_POINTER_MOTION_HINT_MASK | GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK</property>
+                        <property name="is_important">True</property>
+                        <property name="hexpand">False</property>
+                        <property name="halign">end</property>
                         <child>
-                          <object class="GtkBox" id="queue_options_menu_button_box">
-                            <property name="orientation">horizontal</property>
+                          <object class="GtkMenuButton" id="queue_options_menu_button">
                             <property name="visible">True</property>
                             <property name="can_focus">False</property>
+                            <property name="direction">down</property>
+                            <property name="menu-model">queue_options_menu</property>
+                            <property name="relief">GTK_RELIEF_NONE</property>
                             <child>
-                              <object class="GtkImage" id="queue_options_menu_button_image">
+                              <object class="GtkBox" id="queue_options_menu_button_box">
+                                <property name="orientation">horizontal</property>
                                 <property name="visible">True</property>
                                 <property name="can_focus">False</property>
-                                <property name="icon_name">hb-advanced</property>
+                                <child>
+                                  <object class="GtkImage" id="queue_options_menu_button_image">
+                                    <property name="visible">True</property>
+                                    <property name="can_focus">False</property>
+                                    <property name="icon_name">hb-advanced</property>
+                                  </object>
+                                  <packing>
+                                    <property name="position">0</property>
+                                  </packing>
+                                </child>
+                                <child>
+                                  <object class="GtkLabel" id="queue_options_menu_button_label">
+                                    <property name="visible">True</property>
+                                    <property name="can_focus">False</property>
+                                    <property name="xalign">0</property>
+                                    <property name="label" translatable="yes">Options</property>
+                                    <property name="use_markup">True</property>
+                                    <property name="hexpand">True</property>
+                                  </object>
+                                  <packing>
+                                    <property name="position">1</property>
+                                  </packing>
+                                </child>
                               </object>
-                              <packing>
-                                <property name="position">0</property>
-                              </packing>
-                            </child>
-                            <child>
-                              <object class="GtkLabel" id="queue_options_menu_button_label">
-                                <property name="visible">True</property>
-                                <property name="can_focus">False</property>
-                                <property name="width-chars">50</property>
-                                <property name="xalign">0</property>
-                                <property name="label" translatable="yes">Options</property>
-                                <property name="use_markup">True</property>
-                                <property name="hexpand">True</property>
-                              </object>
-                              <packing>
-                                <property name="position">1</property>
-                              </packing>
                             </child>
                           </object>
                         </child>
                       </object>
                       <packing>
-                        <property name="position">1</property>
+                        <property name="homogeneous">True</property>
+                        <property name="expand">False</property>
                       </packing>
                     </child>
                   </object>
@@ -449,6 +525,11 @@ conjunction with the "Forced" option.</property>
                     <property name="orientation">horizontal</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
+                    <property name="margin-top">6</property>
+                    <property name="margin-bottom">6</property>
+                    <property name="halign">center</property>
+                    <property name="hexpand">False</property>
+                    <property name="spacing">6</property>
                     <property name="events">GDK_POINTER_MOTION_MASK | GDK_POINTER_MOTION_HINT_MASK | GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK</property>
                     <child>
                       <object class="GtkLabel" id="queue_done_label">
@@ -464,11 +545,10 @@ conjunction with the "Forced" option.</property>
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkComboBox" id="WhenComplete2">
+                      <object class="GtkComboBox" id="QueueWhenComplete">
                         <property name="visible">True</property>
-                        <property name="valign">GTK_ALIGN_CENTER</property>
                         <property name="can_focus">False</property>
-                        <signal name="changed" handler="pref_changed_cb" swapped="no"/>
+                        <signal name="changed" handler="queue_when_complete_changed_cb" swapped="no"/>
                       </object>
                       <packing>
                         <property name="position">1</property>
@@ -526,7 +606,7 @@ conjunction with the "Forced" option.</property>
                         <property name="events">GDK_POINTER_MOTION_MASK | GDK_POINTER_MOTION_HINT_MASK | GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK</property>
                         <property name="spacing">3</property>
                         <child>
-                          <object class="GtkToolbar" id="queue_toolbar">
+                          <object class="GtkToolbar" id="queue_summary_toolbar">
                             <property name="hexpand">False</property>
                             <property name="halign">start</property>
                             <property name="visible">True</property>
@@ -546,6 +626,7 @@ Resets the queue job to pending and ready to run again.</property>
                               </object>
                               <packing>
                                 <property name="homogeneous">True</property>
+                                <property name="expand">False</property>
                               </packing>
                             </child>
                             <child>
@@ -560,6 +641,7 @@ Resets the queue job to pending and ready to run again.</property>
                               </object>
                               <packing>
                                 <property name="homogeneous">True</property>
+                                <property name="expand">False</property>
                               </packing>
                             </child>
                             <child>
@@ -568,17 +650,21 @@ Resets the queue job to pending and ready to run again.</property>
                                 <property name="can_focus">True</property>
                                 <property name="events">GDK_POINTER_MOTION_MASK | GDK_POINTER_MOTION_HINT_MASK | GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK</property>
                                 <property name="is_important">True</property>
+                                <property name="hexpand">False</property>
                                 <child>
                                   <object class="GtkMenuButton" id="queue_actions_menu_button">
                                     <property name="visible">True</property>
                                     <property name="can_focus">False</property>
                                     <property name="direction">down</property>
+                                    <property name="relief">GTK_RELIEF_NONE</property>
                                     <property name="menu-model">queue_actions_menu</property>
+                                    <property name="hexpand">False</property>
                                     <child>
                                       <object class="GtkBox" id="queue_actions_menu_button_box">
                                         <property name="orientation">horizontal</property>
                                         <property name="visible">True</property>
                                         <property name="can_focus">False</property>
+                                        <property name="hexpand">False</property>
                                         <child>
                                           <object class="GtkImage" id="queue_actions_menu_button_image">
                                             <property name="visible">True</property>
@@ -593,11 +679,10 @@ Resets the queue job to pending and ready to run again.</property>
                                           <object class="GtkLabel" id="queue_actions_menu_button_label">
                                             <property name="visible">True</property>
                                             <property name="can_focus">False</property>
-                                            <property name="width-chars">50</property>
                                             <property name="xalign">0</property>
                                             <property name="label" translatable="yes">Actions</property>
                                             <property name="use_markup">True</property>
-                                            <property name="hexpand">True</property>
+                                            <property name="hexpand">False</property>
                                           </object>
                                           <packing>
                                             <property name="position">1</property>
@@ -610,6 +695,7 @@ Resets the queue job to pending and ready to run again.</property>
                               </object>
                               <packing>
                                 <property name="homogeneous">True</property>
+                                <property name="expand">False</property>
                               </packing>
                             </child>
                           </object>
@@ -632,9 +718,8 @@ Resets the queue job to pending and ready to run again.</property>
                                 <property name="vexpand">True</property>
                                 <property name="hexpand">False</property>
                                 <property name="can_focus">False</property>
-                                <property name="margin-end">32</property>
-                                <property name="row-spacing">2</property>
-                                <property name="column-spacing">6</property>
+                                <property name="column-spacing">12</property>
+                                <property name="row-spacing">12</property>
                                 <child>
                                   <object class="GtkLabel" id="queue_summary_preset_label">
                                     <property name="visible">True</property>
@@ -643,7 +728,6 @@ Resets the queue job to pending and ready to run again.</property>
                                     <property name="yalign">0</property>
                                     <property name="halign">start</property>
                                     <property name="use_markup">True</property>
-                                    <property name="margin-top">12</property>
                                     <property name="label" translatable="yes">Preset:</property>
                                   </object>
                                   <packing>
@@ -663,8 +747,7 @@ Resets the queue job to pending and ready to run again.</property>
                                     <property name="yalign">0</property>
                                     <property name="hexpand">False</property>
                                     <property name="label" translatable="yes"></property>
-                                    <property name="margin-top">12</property>
-                                    <property name="width-chars">40</property>
+                                    <property name="width-chars">50</property>
                                   </object>
                                   <packing>
                                     <property name="top_attach">0</property>
@@ -681,7 +764,6 @@ Resets the queue job to pending and ready to run again.</property>
                                     <property name="yalign">0</property>
                                     <property name="halign">start</property>
                                     <property name="use_markup">True</property>
-                                    <property name="margin-top">12</property>
                                     <property name="label" translatable="yes">Source:</property>
                                   </object>
                                   <packing>
@@ -701,12 +783,12 @@ Resets the queue job to pending and ready to run again.</property>
                                     <property name="yalign">0</property>
                                     <property name="hexpand">False</property>
                                     <property name="label" translatable="yes"></property>
-                                    <property name="margin-top">12</property>
-                                    <property name="width-chars">40</property>
+                                    <property name="width-chars">50</property>
                                     <property name="lines">2</property>
                                     <property name="wrap_mode">word-char</property>
                                     <property name="ellipsize">middle</property>
                                     <property name="selectable">True</property>
+                                    <property name="margin-bottom">12</property>
                                   </object>
                                   <packing>
                                     <property name="top_attach">1</property>
@@ -723,7 +805,6 @@ Resets the queue job to pending and ready to run again.</property>
                                     <property name="yalign">0</property>
                                     <property name="halign">start</property>
                                     <property name="use_markup">True</property>
-                                    <property name="margin-top">12</property>
                                     <property name="label" translatable="yes">Destination:</property>
                                   </object>
                                   <packing>
@@ -743,12 +824,12 @@ Resets the queue job to pending and ready to run again.</property>
                                     <property name="yalign">0</property>
                                     <property name="hexpand">False</property>
                                     <property name="label" translatable="yes"></property>
-                                    <property name="margin-top">12</property>
-                                    <property name="width-chars">40</property>
+                                    <property name="width-chars">50</property>
                                     <property name="lines">2</property>
                                     <property name="wrap_mode">word-char</property>
                                     <property name="ellipsize">middle</property>
                                     <property name="selectable">True</property>
+                                    <property name="margin-bottom">12</property>
                                   </object>
                                   <packing>
                                     <property name="top_attach">2</property>
@@ -765,7 +846,6 @@ Resets the queue job to pending and ready to run again.</property>
                                     <property name="yalign">0</property>
                                     <property name="halign">start</property>
                                     <property name="use_markup">True</property>
-                                    <property name="margin-top">12</property>
                                     <property name="label" translatable="yes">Dimensions:</property>
                                   </object>
                                   <packing>
@@ -785,8 +865,7 @@ Resets the queue job to pending and ready to run again.</property>
                                     <property name="yalign">0</property>
                                     <property name="hexpand">False</property>
                                     <property name="label" translatable="yes"></property>
-                                    <property name="margin-top">12</property>
-                                    <property name="width-chars">40</property>
+                                    <property name="width-chars">50</property>
                                   </object>
                                   <packing>
                                     <property name="top_attach">3</property>
@@ -803,7 +882,6 @@ Resets the queue job to pending and ready to run again.</property>
                                     <property name="yalign">0</property>
                                     <property name="halign">start</property>
                                     <property name="use_markup">True</property>
-                                    <property name="margin-top">12</property>
                                     <property name="label" translatable="yes">Video:</property>
                                   </object>
                                   <packing>
@@ -823,8 +901,7 @@ Resets the queue job to pending and ready to run again.</property>
                                     <property name="yalign">0</property>
                                     <property name="hexpand">False</property>
                                     <property name="label" translatable="yes"></property>
-                                    <property name="margin-top">12</property>
-                                    <property name="width-chars">40</property>
+                                    <property name="width-chars">50</property>
                                   </object>
                                   <packing>
                                     <property name="top_attach">4</property>
@@ -841,7 +918,6 @@ Resets the queue job to pending and ready to run again.</property>
                                     <property name="yalign">0</property>
                                     <property name="halign">start</property>
                                     <property name="use_markup">True</property>
-                                    <property name="margin-top">12</property>
                                     <property name="label" translatable="yes">Audio:</property>
                                   </object>
                                   <packing>
@@ -861,8 +937,7 @@ Resets the queue job to pending and ready to run again.</property>
                                     <property name="yalign">0</property>
                                     <property name="hexpand">False</property>
                                     <property name="label" translatable="yes"></property>
-                                    <property name="margin-top">12</property>
-                                    <property name="width-chars">8</property>
+                                    <property name="width-chars">50</property>
                                   </object>
                                   <packing>
                                     <property name="top_attach">5</property>
@@ -879,7 +954,6 @@ Resets the queue job to pending and ready to run again.</property>
                                     <property name="yalign">0</property>
                                     <property name="halign">start</property>
                                     <property name="use_markup">True</property>
-                                    <property name="margin-top">12</property>
                                     <property name="label" translatable="yes">Subtitles:</property>
                                   </object>
                                   <packing>
@@ -899,8 +973,7 @@ Resets the queue job to pending and ready to run again.</property>
                                     <property name="yalign">0</property>
                                     <property name="hexpand">False</property>
                                     <property name="label" translatable="yes"></property>
-                                    <property name="margin-top">12</property>
-                                    <property name="width-chars">8</property>
+                                    <property name="width-chars">50</property>
                                   </object>
                                   <packing>
                                     <property name="top_attach">6</property>
@@ -942,7 +1015,7 @@ Resets the queue job to pending and ready to run again.</property>
                     <child>
                       <object class="GtkBox" id="queue_log_tab">
                         <property name="orientation">vertical</property>
-                        <property name="visible">True</property>
+                        <property name="visible">False</property>
                         <property name="expand">True</property>
                         <property name="margin-top">12</property>
                         <property name="can_focus">False</property>
@@ -963,6 +1036,7 @@ Resets the queue job to pending and ready to run again.</property>
                                 <property name="margin-top">5</property>
                                 <property name="margin-bottom">5</property>
                                 <property name="selectable">True</property>
+                                <property name="ellipsize">start</property>
                               </object>
                               <packing>
                                 <property name="position">1</property>
@@ -7031,7 +7105,7 @@ filter_output([
                             <property name="visible">True</property>
                             <property name="valign">GTK_ALIGN_CENTER</property>
                             <property name="can_focus">False</property>
-                            <signal name="changed" handler="pref_changed_cb" swapped="no"/>
+                            <signal name="changed" handler="when_complete_changed_cb" swapped="no"/>
                           </object>
                           <packing>
                             <property name="position">0</property>

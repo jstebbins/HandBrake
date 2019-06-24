@@ -601,6 +601,7 @@ void ghb_queue_select_log(signal_user_data_t * ud)
     {
         // There is a queue list row selected
         GtkTextView * tv;
+        int           status;
 
         index = gtk_list_box_row_get_index(row);
         if (index < 0 || index >= ghb_array_len(ud->queue))
@@ -612,7 +613,8 @@ void ghb_queue_select_log(signal_user_data_t * ud)
         // Get the current buffer that is displayed in the queue log
         tv = GTK_TEXT_VIEW(GHB_WIDGET(ud->builder, "queue_activity_view"));
         current = gtk_text_view_get_buffer(tv);
-        if (ghb_dict_get_int(uiDict, "job_status") == GHB_QUEUE_RUNNING)
+        status = ghb_dict_get_int(uiDict, "job_status");
+        if (status == GHB_QUEUE_RUNNING)
         {
             // Selected encode is running, enable display of log and
             // show the live buffer
@@ -633,7 +635,7 @@ void ghb_queue_select_log(signal_user_data_t * ud)
                 gtk_text_view_set_buffer(tv, ud->extra_activity_buffer);
             }
             log_path = ghb_dict_get_string(uiDict, "ActivityFilename");
-            if (log_path != NULL)
+            if (status != GHB_QUEUE_PENDING && log_path != NULL)
             {
                 // enable display of log and read log into display buffer
                 gtk_widget_set_visible(queue_log_tab, TRUE);
@@ -748,10 +750,12 @@ add_to_queue_list(signal_user_data_t *ud, GhbValue *queueDict)
     uiDict = ghb_dict_get(queueDict, "uiSettings");
 
     vbox = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 6));
+    gtk_widget_set_margin_start(GTK_WIDGET(vbox), 12);
     hbox = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6));
 
     status_icon = gtk_image_new_from_icon_name("hb-source",
                                                GTK_ICON_SIZE_BUTTON);
+
     gtk_widget_set_name(status_icon, "queue_item_status");
     gtk_image_set_pixel_size(GTK_IMAGE(status_icon), 16);
     gtk_widget_set_hexpand(status_icon, FALSE);
@@ -765,7 +769,7 @@ add_to_queue_list(signal_user_data_t *ud, GhbValue *queueDict)
     gtk_widget_set_halign(dest_label, GTK_ALIGN_FILL);
     gtk_label_set_justify(GTK_LABEL(dest_label), GTK_JUSTIFY_LEFT);
     gtk_label_set_xalign(GTK_LABEL(dest_label), 0.0);
-    gtk_label_set_max_width_chars(GTK_LABEL(dest_label), 50);
+    gtk_label_set_width_chars(GTK_LABEL(dest_label), 50);
     gtk_label_set_ellipsize(GTK_LABEL(dest_label), PANGO_ELLIPSIZE_END);
 
     delete_button = gtk_button_new_from_icon_name("hb-remove",
@@ -935,6 +939,10 @@ ghb_queue_update_status(signal_user_data_t *ud, int index, int status)
         return; // Never change the status of currently running jobs
     }
 
+    if (status == GHB_QUEUE_PENDING)
+    {
+        ghb_queue_progress_set_visible(ud, index, 0);
+    }
     ghb_dict_set_int(uiDict, "job_status", status);
     ghb_queue_update_status_icon(ud, index);
 }
@@ -2191,6 +2199,7 @@ queue_reset_all_action_cb(GSimpleAction *action, GVariant *param,
 {
     ghb_update_all_status(ud, GHB_QUEUE_PENDING);
     ghb_save_queue(ud->queue);
+    ghb_queue_select_log(ud);
     ghb_update_pending(ud);
 }
 
@@ -2213,6 +2222,7 @@ queue_reset_fail_action_cb(GSimpleAction *action, GVariant *param,
         }
     }
     ghb_save_queue(ud->queue);
+    ghb_queue_select_log(ud);
     ghb_update_pending(ud);
     ghb_queue_buttons_grey(ud);
 }
@@ -2232,6 +2242,7 @@ queue_reset_action_cb(GSimpleAction *action, GVariant *param,
         index = gtk_list_box_row_get_index(row);
         ghb_queue_update_status(ud, index, GHB_QUEUE_PENDING);
         ghb_save_queue(ud->queue);
+        ghb_queue_select_log(ud);
         ghb_update_pending(ud);
     }
 }
@@ -2486,6 +2497,31 @@ ghb_queue_buttons_grey(signal_user_data_t *ud)
         gtk_tool_button_set_label(GTK_TOOL_BUTTON(widget), _("Start"));
         gtk_tool_item_set_tooltip_text(GTK_TOOL_ITEM(widget), _("Start Encoding"));
     }
+    widget = GHB_WIDGET (ud->builder, "queue_list_start");
+    if (show_stop)
+    {
+        gtk_tool_button_set_icon_name(GTK_TOOL_BUTTON(widget), "hb-stop");
+        gtk_tool_button_set_label(GTK_TOOL_BUTTON(widget), _("Stop"));
+        gtk_tool_item_set_tooltip_text(GTK_TOOL_ITEM(widget), _("Stop Encoding"));
+    }
+    else
+    {
+        gtk_tool_button_set_icon_name(GTK_TOOL_BUTTON(widget), "hb-start");
+        gtk_tool_button_set_label(GTK_TOOL_BUTTON(widget), _("Start"));
+        gtk_tool_item_set_tooltip_text(GTK_TOOL_ITEM(widget), _("Start Encoding"));
+    }
+    widget = GHB_WIDGET (ud->builder, "queue_start_menu");
+    if (show_stop)
+    {
+        gtk_menu_item_set_label(GTK_MENU_ITEM(widget), _("S_top Encoding"));
+        gtk_widget_set_tooltip_text(widget, _("Stop Encoding"));
+    }
+    else
+    {
+        gtk_menu_item_set_label(GTK_MENU_ITEM(widget), _("_Start Encoding"));
+        gtk_widget_set_tooltip_text(widget, _("Start Encoding"));
+    }
+
     widget = GHB_WIDGET (ud->builder, "queue_pause");
     if (paused)
     {
@@ -2499,17 +2535,18 @@ ghb_queue_buttons_grey(signal_user_data_t *ud)
         gtk_tool_button_set_label(GTK_TOOL_BUTTON(widget), _("Pause"));
         gtk_tool_item_set_tooltip_text(GTK_TOOL_ITEM(widget), _("Pause Encoding"));
     }
-
-    widget = GHB_WIDGET (ud->builder, "queue_start_menu");
-    if (show_stop)
+    widget = GHB_WIDGET (ud->builder, "queue_list_pause");
+    if (paused)
     {
-        gtk_menu_item_set_label(GTK_MENU_ITEM(widget), _("S_top Encoding"));
-        gtk_widget_set_tooltip_text(widget, _("Stop Encoding"));
+        gtk_tool_button_set_icon_name(GTK_TOOL_BUTTON(widget), "hb-start");
+        gtk_tool_button_set_label(GTK_TOOL_BUTTON(widget), _("Resume"));
+        gtk_tool_item_set_tooltip_text(GTK_TOOL_ITEM(widget), _("Resume Encoding"));
     }
     else
     {
-        gtk_menu_item_set_label(GTK_MENU_ITEM(widget), _("_Start Encoding"));
-        gtk_widget_set_tooltip_text(widget, _("Start Encoding"));
+        gtk_tool_button_set_icon_name(GTK_TOOL_BUTTON(widget), "hb-pause");
+        gtk_tool_button_set_label(GTK_TOOL_BUTTON(widget), _("Pause"));
+        gtk_tool_item_set_tooltip_text(GTK_TOOL_ITEM(widget), _("Pause Encoding"));
     }
     widget = GHB_WIDGET (ud->builder, "queue_pause_menu");
     if (paused)

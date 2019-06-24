@@ -3846,9 +3846,18 @@ ghb_update_pending(signal_user_data_t *ud)
     gint pending;
     gchar *str;
 
-    label = GTK_LABEL(GHB_WIDGET(ud->builder, "pending_status"));
     pending = queue_pending_count(ud->queue);
-    str = g_strdup_printf(_("%d encode(s) pending"), pending);
+    if (pending == 1)
+    {
+        str = g_strdup_printf(_("%d encode pending"), pending);
+    }
+    else
+    {
+        str = g_strdup_printf(_("%d encodes pending"), pending);
+    }
+    label = GTK_LABEL(GHB_WIDGET(ud->builder, "pending_status"));
+    gtk_label_set_text(label, str);
+    label = GTK_LABEL(GHB_WIDGET(ud->builder, "queue_status_label"));
     gtk_label_set_text(label, str);
     g_free(str);
 
@@ -3879,9 +3888,6 @@ ghb_start_next_job(signal_user_data_t *ud)
             ghb_inhibit_suspend(ud);
             submit_job(ud, queueDict);
             ghb_update_pending(ud);
-
-            // Show queue progress bar
-            ghb_queue_progress_set_visible(ud, ii, 1);
             return;
         }
     }
@@ -4858,6 +4864,27 @@ activity_font_changed_cb(GtkWidget *widget, signal_user_data_t *ud)
     pango_font_description_free(font_desc);
     g_free(font);
 #endif
+}
+
+G_MODULE_EXPORT void
+when_complete_changed_cb(GtkWidget *widget, signal_user_data_t *ud)
+{
+    GhbValue * value = ghb_widget_value(widget);
+    ghb_ui_update(ud, "QueueWhenComplete", value);
+
+    ghb_widget_to_setting (ud->prefs, widget);
+
+    ghb_check_dependency(ud, widget, NULL);
+    const gchar *name = ghb_get_setting_key(widget);
+    ghb_pref_set(ud->prefs, name);
+    ghb_prefs_store();
+}
+
+G_MODULE_EXPORT void
+queue_when_complete_changed_cb(GtkWidget *widget, signal_user_data_t *ud)
+{
+    GhbValue * value = ghb_widget_value(widget);
+    ghb_ui_update(ud, "WhenComplete", value);
 }
 
 G_MODULE_EXPORT void
