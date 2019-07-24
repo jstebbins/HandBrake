@@ -124,23 +124,23 @@ preview_set_render_size(signal_user_data_t *ud, int width, int height)
 {
     GtkWidget     * widget;
     GtkWindow     * window;
-    GdkWindow     * w;
+    GhbSurface    * ss;
     GdkGeometry     geo;
 
     widget = GHB_WIDGET (ud->builder, "preview_image");
     gtk_widget_set_size_request(widget, width, height);
     window = GTK_WINDOW(GHB_WIDGET(ud->builder, "preview_window"));
+    ss = ghb_widget_get_surface(GTK_WIDGET(window));
     gtk_window_unmaximize(window);
-    gtk_window_resize(window, width, height);
-    w = gtk_widget_get_window(GTK_WIDGET(window));
-    if (w != NULL)
+    if (ss != NULL)
     {
         geo.min_aspect = (double)(width - 4) / height;
         geo.max_aspect = (double)(width + 4) / height;
         geo.width_inc = geo.height_inc = 2;
-        gdk_window_set_geometry_hints(w, &geo,
-                                      GDK_HINT_ASPECT|GDK_HINT_RESIZE_INC);
+        ghb_surface_set_geometry_hints(ss, &geo,
+                                       GDK_HINT_ASPECT|GDK_HINT_RESIZE_INC);
     }
+    gtk_window_resize(window, width, height);
 
     ud->preview->render_width = width;
     ud->preview->render_height = height;
@@ -218,7 +218,7 @@ live_preview_start(signal_user_data_t *ud)
     img = GTK_IMAGE(GHB_WIDGET(ud->builder, "live_preview_play_image"));
     if (!ud->preview->encoded[ud->preview->frame])
     {
-        gtk_image_set_from_icon_name(img, GHB_PLAY_ICON, GTK_ICON_SIZE_BUTTON);
+        ghb_image_set_from_icon_name(img, GHB_PLAY_ICON, GHB_ICON_SIZE_BUTTON);
         gst_element_set_state(ud->preview->play, GST_STATE_NULL);
         ud->preview->pause = TRUE;
         return;
@@ -231,7 +231,7 @@ live_preview_start(signal_user_data_t *ud)
 #else
         uri = g_strdup_printf("file://%s", ud->preview->current);
 #endif
-        gtk_image_set_from_icon_name(img, GHB_PAUSE_ICON, GTK_ICON_SIZE_BUTTON);
+        ghb_image_set_from_icon_name(img, GHB_PAUSE_ICON, GHB_ICON_SIZE_BUTTON);
         ud->preview->state = PREVIEW_STATE_LIVE;
         g_object_set(G_OBJECT(ud->preview->play), "uri", uri, NULL);
         g_free(uri);
@@ -249,7 +249,7 @@ live_preview_pause(signal_user_data_t *ud)
         return;
 
     img = GTK_IMAGE(GHB_WIDGET(ud->builder, "live_preview_play_image"));
-    gtk_image_set_from_icon_name(img, GHB_PLAY_ICON, GTK_ICON_SIZE_BUTTON);
+    ghb_image_set_from_icon_name(img, GHB_PLAY_ICON, GHB_ICON_SIZE_BUTTON);
     gst_element_set_state(ud->preview->play, GST_STATE_PAUSED);
     ud->preview->pause = TRUE;
 }
@@ -265,7 +265,7 @@ live_preview_stop(signal_user_data_t *ud)
         return;
 
     img = GTK_IMAGE(GHB_WIDGET(ud->builder, "live_preview_play_image"));
-    gtk_image_set_from_icon_name(img, GHB_PLAY_ICON, GTK_ICON_SIZE_BUTTON);
+    ghb_image_set_from_icon_name(img, GHB_PLAY_ICON, GHB_ICON_SIZE_BUTTON);
 #if defined(_ENABLE_GST)
     gst_element_set_state(ud->preview->play, GST_STATE_NULL);
 #endif
@@ -333,13 +333,10 @@ caps_set(GstCaps *caps, signal_user_data_t *ud)
         preview_set_size(ud, width, height);
         if (ghb_dict_get_bool(ud->prefs, "reduce_hd_preview"))
         {
-            GdkWindow *window;
             gint s_w, s_h;
 
-            window = gtk_widget_get_window(
-                        GHB_WIDGET(ud->builder, "preview_window"));
-            ghb_monitor_get_size(window, &s_w, &s_h);
-
+            ghb_monitor_get_size(GHB_WIDGET(ud->builder, "preview_window"),
+                                 &s_w, &s_h);
             if (s_w > 0 && s_h > 0)
             {
                 if (width > s_w * 80 / 100)
@@ -1089,11 +1086,15 @@ ghb_preview_set_visible(signal_user_data_t *ud, gboolean visible)
     widget = GHB_WIDGET(ud->builder, "preview_window");
     if (visible)
     {
+#if !GTK_CHECK_VERSION(3, 90, 0)
+        // TODO: can this be done in GTK4?
         gint x, y;
         x = ghb_dict_get_int(ud->prefs, "preview_x");
         y = ghb_dict_get_int(ud->prefs, "preview_y");
+
         if (x >= 0 && y >= 0)
             gtk_window_move(GTK_WINDOW(widget), x, y);
+#endif
         gtk_window_deiconify(GTK_WINDOW(widget));
     }
     gtk_widget_set_visible(widget, visible);
@@ -1158,7 +1159,9 @@ preview_frame_value_changed_cb(GtkWidget *widget, signal_user_data_t *ud)
 G_MODULE_EXPORT gboolean
 preview_window_delete_cb(
     GtkWidget *widget,
+#if !GTK_CHECK_VERSION(3, 90, 0)
     GdkEvent *event,
+#endif
     signal_user_data_t *ud)
 {
     live_preview_stop(ud);
@@ -1278,26 +1281,33 @@ preview_motion_cb(
     return FALSE;
 }
 
+// TODO: GTK4 eliminated "configure-event" signal.  I believe
+// GdkPaintable "invalidate-size" is not the method to use?
 G_MODULE_EXPORT gboolean
 preview_configure_cb(
     GtkWidget *widget,
     GdkEventConfigure *event,
     signal_user_data_t *ud)
 {
-    gint x, y;
-
     if (gtk_widget_get_visible(widget))
     {
+#if !GTK_CHECK_VERSION(3, 90, 0)
+        // TODO: can this be done in GTK4?
+        gint x, y;
+
         gtk_window_get_position(GTK_WINDOW(widget), &x, &y);
         ghb_dict_set_int(ud->prefs, "preview_x", x);
         ghb_dict_set_int(ud->prefs, "preview_y", y);
         ghb_pref_set(ud->prefs, "preview_x");
         ghb_pref_set(ud->prefs, "preview_y");
         ghb_prefs_store();
+#endif
     }
     return FALSE;
 }
 
+#if !GTK_CHECK_VERSION(3, 90, 0)
+// GTK4 no longer has GDK_WINDOW_STATE events :*(
 G_MODULE_EXPORT gboolean
 preview_state_cb(
     GtkWidget *widget,
@@ -1312,15 +1322,9 @@ preview_state_cb(
         // I only do this because there seems to be no
         // way to reliably disable the iconfy button without
         // also disabling the maximize button.
-#if GTK_CHECK_VERSION(3, 90, 0)
-        GdkWindow      * window = gdk_event_get_window(event);
-        GdkWindowState   state  = gdk_window_get_state(window);
-        if (state & GDK_WINDOW_STATE_ICONIFIED)
-#else
         GdkEventWindowState * wse = (GdkEventWindowState*)event;
         if (wse->changed_mask & wse->new_window_state &
             GDK_WINDOW_STATE_ICONIFIED)
-#endif
         {
             live_preview_stop(ud);
             GtkWidget *widget = GHB_WIDGET(ud->builder, "show_preview");
@@ -1329,6 +1333,7 @@ preview_state_cb(
     }
     return FALSE;
 }
+#endif
 
 G_MODULE_EXPORT void
 preview_resize_cb(

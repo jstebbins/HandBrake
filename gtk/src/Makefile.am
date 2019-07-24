@@ -65,6 +65,8 @@ bin_PROGRAMS = ghb
 nodist_EXTRA_ghb_SOURCES = dummy.cpp
 
 ghb_SOURCES = \
+	ghbcompat.c \
+	ghbcompat.h \
 	callbacks.c \
 	callbacks.h \
 	queuehandler.c \

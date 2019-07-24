@@ -1,12 +1,24 @@
 changequote(`[', `]')dnl
 define([filter_output],
-        [ifelse(eval(gtk_version >= 400), 1,
-            [patsubst([patsubst([$1], [\"image\"], [\"icon-name\"])],
-                      [^.*<property name\=\"events\">.*$], [])],
-         [ifelse(eval(gtk_version <= 312), 1,
-            [patsubst([patsubst([$1], [margin-start], [margin-left])],
-                      [margin-end], [margin-right])], [$1])]
-       )])dnl
+    [ifelse(eval(gtk_version >= 400), 1,
+        [patsubst([$1],
+            [^.*<property name\=\"events\">.*$], [])],
+        [ifelse(eval(gtk_version > 312), 1,
+            [patsubst(
+            [patsubst([$1],
+                [\"icon-name\"], [\"image\"])],
+                [close-request], [delete-event])],
+            [patsubst(
+            [patsubst(
+            [patsubst(
+            [patsubst([$1],
+                [\"icon-name\"], [\"image\"])],
+                [margin-start], [margin-left])],
+                [margin-end], [margin-right])]
+                [close-request], [delete-event])],
+        )]
+    )]
+)dnl
 filter_output([
 <?xml version="1.0" encoding="UTF-8"?>
 <interface>
@@ -147,12 +159,10 @@ conjunction with the "Forced" option.</property>
     <property name="can_focus">False</property>
     <property name="events">GDK_POINTER_MOTION_MASK | GDK_POINTER_MOTION_HINT_MASK | GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK</property>
     <property name="type_hint">utility</property>
-    <property name="skip_taskbar_hint">True</property>
-    <property name="skip_pager_hint">True</property>
     <property name="transient_for">hb_window</property>
     <property name="default_width">300</property>
     <property name="default_height">600</property>
-    <signal name="delete-event" handler="presets_window_delete_cb" swapped="no"/>
+    <signal name="close-request" handler="presets_window_delete_cb" swapped="no"/>
     <signal name="configure-event" handler="presets_window_configure_cb" swapped="no"/>
     <child>
       <object class="GtkBox" id="presets_window_box">
@@ -331,11 +341,9 @@ conjunction with the "Forced" option.</property>
     <property name="resizable">True</property>
     <property name="window_position">center</property>
     <property name="type_hint">utility</property>
-    <property name="skip_taskbar_hint">True</property>
-    <property name="skip_pager_hint">True</property>
     <property name="transient_for">hb_window</property>
     <property name="default_width">1024</property>
-    <signal name="delete-event" handler="queue_window_delete_cb" swapped="no"/>
+    <signal name="close-request" handler="queue_window_delete_cb" swapped="no"/>
     <child>
       <object class="GtkBox" id="queue_tab">
         <property name="orientation">vertical</property>
@@ -1408,10 +1416,8 @@ Resets the queue job to pending and ready to run again.</property>
     <property name="default_width">800</property>
     <property name="default_height">600</property>
     <property name="type_hint">utility</property>
-    <property name="skip_taskbar_hint">True</property>
-    <property name="skip_pager_hint">True</property>
     <property name="transient_for">hb_window</property>
-    <signal name="delete-event" handler="activity_window_delete_cb" swapped="no"/>
+    <signal name="close-request" handler="activity_window_delete_cb" swapped="no"/>
     <child>
       <object class="GtkBox" id="vbox37">
         <property name="orientation">vertical</property>
@@ -1679,8 +1685,6 @@ Resets the queue job to pending and ready to run again.</property>
     <property name="can_focus">False</property>
     <property name="title" translatable="yes">About HandBrake</property>
     <property name="type_hint">dialog</property>
-    <property name="skip_taskbar_hint">True</property>
-    <property name="skip_pager_hint">True</property>
     <property name="program_name">HandBrake</property>
     <property name="version">0.9.2</property>
     <property name="copyright" translatable="yes">Copyright © 2008 -  John Stebbins
@@ -1847,7 +1851,7 @@ libx264 authors:
 </property>
     <property name="logo_icon_name">hb-icon</property>
     <property name="wrap_license">True</property>
-    <signal name="delete-event" handler="gtk_widget_hide_on_delete" swapped="no"/>
+    <signal name="close-request" handler="ghb_widget_hide_on_close" swapped="no"/>
     <signal name="response" handler="hb_about_response_cb" swapped="no"/>
     <child internal-child="vbox">
       <object class="GtkBox" id="dialog-vbox4">
@@ -1881,7 +1885,7 @@ libx264 authors:
     <property name="icon_name">hb-icon</property>
     <signal name="map-event" handler="window_map_cb" swapped="no"/>
     <signal name="configure-event" handler="window_configure_cb" swapped="no"/>
-    <signal name="delete-event" handler="window_delete_event_cb" swapped="no"/>
+    <signal name="close-request" handler="window_delete_event_cb" swapped="no"/>
     <signal name="destroy-event" handler="window_destroy_event_cb" swapped="no"/>
     <child>
       <object class="GtkBox" id="vbox48">
@@ -7099,7 +7103,7 @@ Only one subtitle track can be burned! Since conflicts can occur, the first chos
             <child>
               <object class="GtkButton" id="title_add_multiple_cancel">
                 <property name="label" translatable="yes">Cancel</property>
-                <property name="image">gtk-cancel</property>
+                <property name="icon-name">gtk-cancel</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="receives_default">True</property>
@@ -7111,7 +7115,7 @@ Only one subtitle track can be burned! Since conflicts can occur, the first chos
             <child>
               <object class="GtkButton" id="title_add_multiple_ok">
                 <property name="label" translatable="yes">OK</property>
-                <property name="image">gtk-ok</property>
+                <property name="icon-name">gtk-ok</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="receives_default">True</property>
@@ -7272,9 +7276,7 @@ Only one subtitle track can be burned! Since conflicts can occur, the first chos
     <property name="modal">True</property>
     <property name="window_position">center-on-parent</property>
     <property name="type_hint">dialog</property>
-    <property name="skip_taskbar_hint">True</property>
-    <property name="skip_pager_hint">True</property>
-    <signal name="delete-event" handler="gtk_widget_hide_on_delete" swapped="no"/>
+    <signal name="close-request" handler="ghb_widget_hide_on_close" swapped="no"/>
     <child internal-child="vbox">
       <object class="GtkBox" id="dialog-vbox6">
         <property name="visible">True</property>
@@ -7288,7 +7290,7 @@ Only one subtitle track can be burned! Since conflicts can occur, the first chos
             <child>
               <object class="GtkButton" id="pref_ok">
                 <property name="label" translatable="yes">OK</property>
-                <property name="image">gtk-ok</property>
+                <property name="icon-name">gtk-ok</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="receives_default">True</property>
@@ -8044,7 +8046,7 @@ Uncheck this if you want to allow changing each title's settings independently.<
     <property name="modal">True</property>
     <property name="window_position">center-on-parent</property>
     <property name="type_hint">dialog</property>
-    <signal name="delete-event" handler="gtk_widget_hide_on_delete" swapped="no"/>
+    <signal name="close-request" handler="ghb_widget_hide_on_close" swapped="no"/>
     <child internal-child="vbox">
       <object class="GtkBox" id="dialog-vbox2">
         <property name="visible">True</property>
@@ -8060,7 +8062,7 @@ Uncheck this if you want to allow changing each title's settings independently.<
             <child>
               <object class="GtkButton" id="preset_folder_cancel">
                 <property name="label" translatable="yes">Cancel</property>
-                <property name="image">gtk-cancel</property>
+                <property name="icon-name">gtk-cancel</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="receives_default">True</property>
@@ -8074,7 +8076,7 @@ Uncheck this if you want to allow changing each title's settings independently.<
             <child>
               <object class="GtkButton" id="preset_folder_ok">
                 <property name="label" translatable="yes">OK</property>
-                <property name="image">gtk-ok</property>
+                <property name="icon-name">gtk-ok</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="receives_default">True</property>
@@ -8195,7 +8197,7 @@ Uncheck this if you want to allow changing each title's settings independently.<
     <property name="modal">True</property>
     <property name="window_position">center-on-parent</property>
     <property name="type_hint">dialog</property>
-    <signal name="delete-event" handler="gtk_widget_hide_on_delete" swapped="no"/>
+    <signal name="close-request" handler="ghb_widget_hide_on_close" swapped="no"/>
     <child internal-child="vbox">
       <object class="GtkBox" id="dialog-preset-rename-box">
         <property name="visible">True</property>
@@ -8212,7 +8214,7 @@ Uncheck this if you want to allow changing each title's settings independently.<
             <child>
               <object class="GtkButton" id="preset_rename_cancel">
                 <property name="label" translatable="yes">Cancel</property>
-                <property name="image">gtk-cancel</property>
+                <property name="icon-name">gtk-cancel</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="receives_default">True</property>
@@ -8226,7 +8228,7 @@ Uncheck this if you want to allow changing each title's settings independently.<
             <child>
               <object class="GtkButton" id="preset_rename_ok">
                 <property name="label" translatable="yes">OK</property>
-                <property name="image">gtk-ok</property>
+                <property name="icon-name">gtk-ok</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="receives_default">True</property>
@@ -8363,7 +8365,7 @@ Uncheck this if you want to allow changing each title's settings independently.<
     <property name="modal">True</property>
     <property name="window_position">center-on-parent</property>
     <property name="type_hint">dialog</property>
-    <signal name="delete-event" handler="gtk_widget_hide_on_delete" swapped="no"/>
+    <signal name="close-request" handler="ghb_widget_hide_on_close" swapped="no"/>
     <child internal-child="vbox">
       <object class="GtkBox" id="dialog-vbox3">
         <property name="visible">True</property>
@@ -8379,7 +8381,7 @@ Uncheck this if you want to allow changing each title's settings independently.<
             <child>
               <object class="GtkButton" id="preset_cancel">
                 <property name="label" translatable="yes">Cancel</property>
-                <property name="image">gtk-cancel</property>
+                <property name="icon-name">gtk-cancel</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="receives_default">True</property>
@@ -8392,7 +8394,7 @@ Uncheck this if you want to allow changing each title's settings independently.<
             <child>
               <object class="GtkButton" id="preset_ok">
                 <property name="label" translatable="yes">OK</property>
-                <property name="image">gtk-ok</property>
+                <property name="icon-name">gtk-ok</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="receives_default">True</property>
@@ -8732,7 +8734,7 @@ Setting this to 0 means there is no maximum height.</property>
     <property name="icon-name">hb-icon</property>
     <signal name="window-state-event" handler="preview_state_cb" swapped="no"/>
     <signal name="configure-event" handler="preview_configure_cb" swapped="no"/>
-    <signal name="delete-event" handler="preview_window_delete_cb" swapped="no"/>
+    <signal name="close-request" handler="preview_window_delete_cb" swapped="no"/>
     <child>
 ])dnl
 ifelse(eval(gtk_version >= 400), 1, filter_output([
@@ -8953,8 +8955,6 @@ filter_output([
     <property name="can_focus">False</property>
     <property name="modal">True</property>
     <property name="type_hint">dialog</property>
-    <property name="skip_taskbar_hint">True</property>
-    <property name="skip_pager_hint">True</property>
     <property name="create_folders">False</property>
     <property name="local_only">False</property>
     <property name="transient_for">hb_window</property>
@@ -8964,7 +8964,7 @@ ifelse(eval(gtk_version >= 314), 1, filter_output([
     <child type="action">
       <object class="GtkButton" id="source_cancel">
         <property name="label" translatable="yes">_Cancel</property>
-        <property name="image">gtk-cancel</property>
+        <property name="icon-name">gtk-cancel</property>
         <property name="use-underline">True</property>
         <property name="visible">True</property>
         <property name="can_focus">True</property>
@@ -8976,7 +8976,7 @@ ifelse(eval(gtk_version >= 314), 1, filter_output([
     <child type="action">
       <object class="GtkButton" id="source_ok">
         <property name="label" translatable="yes">_Open</property>
-        <property name="image">gtk-ok</property>
+        <property name="icon-name">gtk-ok</property>
         <property name="use-underline">True</property>
         <property name="visible">True</property>
         <property name="can_focus">True</property>
@@ -9009,7 +9009,7 @@ ifelse(eval(gtk_version <= 312), 1, filter_output([
               <object class="GtkButton" id="source_cancel">
                 <property name="label" translatable="yes">_Cancel</property>
                 <property name="use-underline">True</property>
-                <property name="image">gtk-cancel</property>
+                <property name="icon-name">gtk-cancel</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="can_default">True</property>
@@ -9024,7 +9024,7 @@ ifelse(eval(gtk_version <= 312), 1, filter_output([
               <object class="GtkButton" id="source_ok">
                 <property name="label" translatable="yes">_Open</property>
                 <property name="use-underline">True</property>
-                <property name="image">gtk-ok</property>
+                <property name="icon-name">gtk-ok</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="can_default">True</property>
@@ -9160,8 +9160,6 @@ filter_output([
     <property name="resizable">False</property>
     <property name="window_position">center-on-parent</property>
     <property name="type_hint">dialog</property>
-    <property name="skip_taskbar_hint">True</property>
-    <property name="skip_pager_hint">True</property>
     <child internal-child="vbox">
       <object class="GtkBox" id="dialog-subtitle-vbox">
         <property name="visible">True</property>
@@ -9175,7 +9173,7 @@ filter_output([
             <child>
               <object class="GtkButton" id="subtitle_cancel">
                 <property name="label" translatable="yes">Cancel</property>
-                <property name="image">gtk-cancel</property>
+                <property name="icon-name">gtk-cancel</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="receives_default">True</property>
@@ -9187,7 +9185,7 @@ filter_output([
             <child>
               <object class="GtkButton" id="subtitle_ok">
                 <property name="label" translatable="yes">OK</property>
-                <property name="image">gtk-ok</property>
+                <property name="icon-name">gtk-ok</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="receives_default">True</property>
@@ -9541,8 +9539,6 @@ in your output.</property>
     <property name="resizable">False</property>
     <property name="window_position">center-on-parent</property>
     <property name="type_hint">dialog</property>
-    <property name="skip_taskbar_hint">True</property>
-    <property name="skip_pager_hint">True</property>
     <child internal-child="vbox">
       <object class="GtkBox" id="dialog-audio-vbox">
         <property name="visible">True</property>
@@ -9556,7 +9552,7 @@ in your output.</property>
             <child>
               <object class="GtkButton" id="audio_cancel">
                 <property name="label" translatable="yes">Cancel</property>
-                <property name="image">gtk-cancel</property>
+                <property name="icon-name">gtk-cancel</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="receives_default">True</property>
@@ -9568,7 +9564,7 @@ in your output.</property>
             <child>
               <object class="GtkButton" id="audio_ok">
                 <property name="label" translatable="yes">OK</property>
-                <property name="image">gtk-ok</property>
+                <property name="icon-name">gtk-ok</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="receives_default">True</property>
@@ -10037,8 +10033,6 @@ DRC allows you to 'compress' the range by making loud sounds softer and soft sou
     <property name="modal">True</property>
     <property name="window_position">center-on-parent</property>
     <property name="type_hint">dialog</property>
-    <property name="skip_taskbar_hint">True</property>
-    <property name="skip_pager_hint">True</property>
     <child internal-child="vbox">
       <object class="GtkBox" id="dialog-vbox8">
         <property name="visible">True</property>

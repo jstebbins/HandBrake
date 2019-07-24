@@ -62,7 +62,10 @@
 #define NOTIFY_CHECK_VERSION(x,y,z) 0
 #endif
 
+#if !GTK_CHECK_VERSION(3, 4, 0)
 #include <gdk/gdkx.h>
+#endif
+
 #ifndef NOTIFY_CHECK_VERSION
 #define NOTIFY_CHECK_VERSION(x,y,z) 0
 #endif
@@ -289,6 +292,7 @@ ghb_shutdown_gpm()
 }
 #endif
 
+#if !GTK_CHECK_VERSION(3, 4, 0)
 guint
 ghb_inhibit_gpm()
 {
@@ -358,6 +362,7 @@ ghb_uninhibit_gpm(guint cookie)
     g_object_unref(G_OBJECT(proxy));
 #endif
 }
+#endif
 
 #if !defined(_WIN32)
 // For inhibit and shutdown
@@ -435,6 +440,7 @@ ghb_shutdown_gsm()
 #endif
 }
 
+#if !GTK_CHECK_VERSION(3, 4, 0)
 guint
 ghb_inhibit_gsm(signal_user_data_t *ud)
 {
@@ -508,6 +514,7 @@ ghb_uninhibit_gsm(guint cookie)
     g_object_unref(G_OBJECT(proxy));
 #endif
 }
+#endif
 
 enum {
     GHB_SUSPEND_UNINHIBITED = 0,
@@ -559,8 +566,7 @@ ghb_uninhibit_suspend(signal_user_data_t *ud)
         case GHB_SUSPEND_INHIBITED_GTK:
             gtk_application_uninhibit(ud->app, suspend_cookie);
             break;
-#endif
-
+#else
         case GHB_SUSPEND_INHIBITED_GPM:
             ghb_uninhibit_gpm(suspend_cookie);
             break;
@@ -568,7 +574,7 @@ ghb_uninhibit_suspend(signal_user_data_t *ud)
         case GHB_SUSPEND_INHIBITED_GSM:
             ghb_uninhibit_gsm(suspend_cookie);
             break;
-
+#endif
         default:
             break;
     }
@@ -737,7 +743,7 @@ ghb_check_dependency(
         {
             if (!gtk_widget_get_visible(GTK_WIDGET(dep_object)))
             {
-                gtk_widget_show_now(GTK_WIDGET(dep_object));
+                gtk_widget_show(GTK_WIDGET(dep_object));
             }
         }
     }
@@ -774,7 +780,7 @@ ghb_check_all_depencencies(signal_user_data_t *ud)
         }
         else
         {
-            gtk_widget_show_now(GTK_WIDGET(dep_object));
+            gtk_widget_show(GTK_WIDGET(dep_object));
         }
     }
 }
@@ -1939,7 +1945,7 @@ ghb_update_destination_extension(signal_user_data_t *ud)
     busy = TRUE;
     extension = get_extension(ud, ud->settings);
     entry = GTK_ENTRY(GHB_WIDGET(ud->builder, "dest_file"));
-    filename = g_strdup(gtk_entry_get_text(entry));
+    filename = g_strdup(ghb_entry_get_text(entry));
     for (ii = 0; containers[ii] != NULL; ii++)
     {
         if (g_str_has_suffix(filename, containers[ii]))
@@ -1975,7 +1981,7 @@ destination_select_title(GtkEntry *entry)
     const gchar *dest;
     gint start, end;
 
-    dest = gtk_entry_get_text(entry);
+    dest = ghb_entry_get_text(entry);
     for (end = strlen(dest)-1; end > 0; end--)
     {
         if (dest[end] == '.')
@@ -2091,7 +2097,7 @@ destination_action_cb(GSimpleAction *action, GVariant *param,
         basename = g_path_get_basename(filename);
         dirname = g_path_get_dirname(filename);
         entry = (GtkEntry*)GHB_WIDGET(ud->builder, "dest_file");
-        gtk_entry_set_text(entry, basename);
+        ghb_entry_set_text(entry, basename);
         dest_chooser = GTK_FILE_CHOOSER(GHB_WIDGET(ud->builder, "dest_dir"));
         gtk_file_chooser_set_filename(dest_chooser, dirname);
         g_free (dirname);
@@ -2112,13 +2118,18 @@ window_destroy_event_cb(GtkWidget *widget, GdkEvent *event, signal_user_data_t *
 }
 
 G_MODULE_EXPORT gboolean
-window_delete_event_cb(GtkWidget *widget, GdkEvent *event, signal_user_data_t *ud)
+window_delete_event_cb(
+    GtkWidget *widget,
+#if !GTK_CHECK_VERSION(3, 90, 0)
+    GdkEvent *event,
+#endif
+    signal_user_data_t *ud)
 {
     gint state = ghb_get_queue_state();
-    g_debug("window_delete_event_cb ()");
     if (state & (GHB_STATE_WORKING|GHB_STATE_SEARCHING))
     {
-        if (ghb_cancel_encode2(ud, _("Closing HandBrake will terminate encoding.\n")))
+        if (ghb_cancel_encode2(ud,
+            _("Closing HandBrake will terminate encoding.\n")))
         {
             ghb_hb_cleanup(FALSE);
             prune_logs(ud);
@@ -2300,7 +2311,7 @@ ghb_update_summary_info(signal_user_data_t *ud)
         widget = GHB_WIDGET(ud->builder, "dimensions_summary");
         gtk_label_set_text(GTK_LABEL(widget), "--");
         widget = GHB_WIDGET(ud->builder, "preview_button_image");
-        gtk_image_set_from_icon_name(GTK_IMAGE(widget), "hb-icon", 128);
+        ghb_image_set_from_icon_name(GTK_IMAGE(widget), "hb-icon", 128);
         return;
     }
 
@@ -3169,7 +3180,7 @@ ptop_input_cb(GtkWidget *widget, gdouble *val, signal_user_data_t *ud)
     double ss = 0;
     int hh = 0, mm = 0;
 
-    text = gtk_entry_get_text(GTK_ENTRY(widget));
+    text = ghb_entry_get_text(GTK_ENTRY(widget));
     result = sscanf(text, "%2d:%2d:%lf", &hh, &mm, &ss);
     if (result <= 0)
         return FALSE;
@@ -3201,7 +3212,7 @@ ptop_output_cb(GtkWidget *widget, signal_user_data_t *ud)
     value = value - mm * 60;
     ss = value;
     text = g_strdup_printf ("%02d:%02d:%05.2f", hh, mm, ss);
-    gtk_entry_set_text(GTK_ENTRY(widget), text);
+    ghb_entry_set_text(GTK_ENTRY(widget), text);
     g_free (text);
 
     return TRUE;
@@ -4431,19 +4442,12 @@ show_activity_action_cb(GSimpleAction *action, GVariant *value,
 }
 
 G_MODULE_EXPORT gboolean
-presets_window_delete_cb(GtkWidget *xwidget, GdkEvent *event, signal_user_data_t *ud)
-{
-    GSimpleAction * action;
-    GVariant      * state = g_variant_new_boolean(FALSE);
-
-    action = G_SIMPLE_ACTION(g_action_map_lookup_action(
-                             G_ACTION_MAP(ud->app), "show-presets"));
-    g_action_change_state(G_ACTION(action), state);
-    return TRUE;
-}
-
-G_MODULE_EXPORT gboolean
-activity_window_delete_cb(GtkWidget *xwidget, GdkEvent *event, signal_user_data_t *ud)
+activity_window_delete_cb(
+    GtkWidget *xwidget,
+#if !GTK_CHECK_VERSION(3, 90, 0)
+    GdkEvent *event,
+#endif
+    signal_user_data_t *ud)
 {
     gtk_widget_set_visible(xwidget, FALSE);
     GtkWidget *widget = GHB_WIDGET (ud->builder, "show_activity");
@@ -4566,7 +4570,6 @@ presets_window_set_visible(signal_user_data_t *ud, gboolean visible)
 {
     GtkWidget     * presets_window;
     GtkWidget     * hb_window;
-    int             x, y;
 
     hb_window = GHB_WIDGET(ud->builder, "hb_window");
     if (!gtk_widget_is_visible(hb_window))
@@ -4584,6 +4587,11 @@ presets_window_set_visible(signal_user_data_t *ud, gboolean visible)
         gtk_window_resize(GTK_WINDOW(presets_window), w, h);
     }
     gtk_widget_set_visible(presets_window, visible);
+
+#if !GTK_CHECK_VERSION(3, 90, 0)
+    // TODO: Is this possible in GTK4?
+    int             x, y;
+
     if (visible)
     {
         gtk_window_get_position(GTK_WINDOW(hb_window), &x, &y);
@@ -4595,6 +4603,7 @@ presets_window_set_visible(signal_user_data_t *ud, gboolean visible)
         }
         gtk_window_move(GTK_WINDOW(presets_window), x, y);
     }
+#endif
 }
 
 G_MODULE_EXPORT void
@@ -4864,10 +4873,18 @@ activity_font_changed_cb(GtkWidget *widget, signal_user_data_t *ud)
     GtkCssProvider * provider = gtk_css_provider_new();
 
     ghb_css_provider_load_from_data(provider, css, -1);
-    GdkScreen *ss = gdk_screen_get_default();
+    GtkWidget * win = GHB_WIDGET(ud->builder, "hb_window");
+#if GTK_CHECK_VERSION(3, 90, 0)
+    GdkDisplay *dd = gtk_widget_get_display(win);
+    gtk_style_context_add_provider_for_display(dd,
+                                GTK_STYLE_PROVIDER(provider),
+                                GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+#else
+    GdkScreen *ss = gtk_window_get_screen(GTK_WINDOW(win));
     gtk_style_context_add_provider_for_screen(ss,
                                 GTK_STYLE_PROVIDER(provider),
                                 GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+#endif
     g_object_unref(provider);
     g_free(css);
 #else
@@ -5615,31 +5632,6 @@ window_map_cb(
     GdkEventAny *event,
     signal_user_data_t *ud)
 {
-    return FALSE;
-}
-
-G_MODULE_EXPORT gboolean
-presets_window_configure_cb(
-    GtkWidget *widget,
-    GdkEventConfigure *event,
-    signal_user_data_t *ud)
-{
-    if (gtk_widget_get_visible(widget))
-    {
-        gint w, h, ww, wh;
-        w = ghb_dict_get_int(ud->prefs, "presets_window_width");
-        h = ghb_dict_get_int(ud->prefs, "presets_window_height");
-
-        gtk_window_get_size(GTK_WINDOW(widget), &ww, &wh);
-        if ( w != ww || h != wh )
-        {
-            ghb_dict_set_int(ud->prefs, "presets_window_width", ww);
-            ghb_dict_set_int(ud->prefs, "presets_window_height", wh);
-            ghb_pref_set(ud->prefs, "presets_window_width");
-            ghb_pref_set(ud->prefs, "presets_window_height");
-            ghb_prefs_store();
-        }
-    }
     return FALSE;
 }
 
