@@ -1040,6 +1040,23 @@ ghb_reset_preview_image(signal_user_data_t *ud)
     gtk_widget_queue_draw(widget);
 }
 
+#if GTK_CHECK_VERSION(3, 90, 0)
+G_MODULE_EXPORT void
+preview_draw_cb(
+    GtkDrawingArea * da,
+    cairo_t        * cr,
+    int              width,
+    int              height,
+    signal_user_data_t *ud)
+{
+    if (ud->preview->scaled_pix != NULL)
+    {
+        _draw_pixbuf(ud, cr, ud->preview->scaled_pix);
+    }
+}
+
+#else
+
 G_MODULE_EXPORT gboolean
 preview_draw_cb(
     GtkWidget *widget,
@@ -1052,13 +1069,26 @@ preview_draw_cb(
     }
     return FALSE;
 }
+#endif
 
 G_MODULE_EXPORT void
-preview_button_size_allocate_cb(GtkWidget *widget, GdkRectangle *allocation, signal_user_data_t *ud)
+preview_button_size_allocate_cb(
+    GtkWidget *widget,
+#if GTK_CHECK_VERSION(3, 90, 0)
+    int width,
+    int height,
+    int baseline,
+#else
+    GdkRectangle *rect,
+#endif
+    signal_user_data_t *ud)
 {
-    g_debug("allocate %d x %d", allocation->width, allocation->height);
-    if (ud->preview->button_width == allocation->width &&
-        ud->preview->button_height == allocation->height)
+#if !GTK_CHECK_VERSION(3, 90, 0)
+    int width  = rect->width;
+    int height = rect->height;
+#endif
+    if (ud->preview->button_width  == width &&
+        ud->preview->button_height == height)
     {
         // Nothing to do. Bug out.
         g_debug("nothing to do");
@@ -1066,8 +1096,8 @@ preview_button_size_allocate_cb(GtkWidget *widget, GdkRectangle *allocation, sig
     }
     g_debug("prev allocate %d x %d", ud->preview->button_width,
             ud->preview->button_height);
-    ud->preview->button_width = allocation->width;
-    ud->preview->button_height = allocation->height;
+    ud->preview->button_width  = width;
+    ud->preview->button_height = height;
     set_mini_preview_image(ud, ud->preview->pix);
 }
 
@@ -1197,12 +1227,24 @@ hud_timeout(signal_user_data_t *ud)
 
 static gboolean in_hud = FALSE;
 
+#if GTK_CHECK_VERSION(3, 90, 0)
+G_MODULE_EXPORT void
+hud_enter_cb(
+    GtkEventControllerMotion * econ,
+    double                     x,
+    double                     y,
+    GdkCrossingMode            cross,
+    GdkNotifyType              notify,
+    signal_user_data_t *ud)
+#else
 G_MODULE_EXPORT gboolean
 hud_enter_cb(
     GtkWidget *widget,
     GdkEventCrossing *event,
     signal_user_data_t *ud)
+#endif
 {
+    GtkWidget * hud;
     if (hud_timeout_id != 0)
     {
         GMainContext *mc;
@@ -1213,31 +1255,53 @@ hud_enter_cb(
         if (source != NULL)
             g_source_destroy(source);
     }
-    widget = GHB_WIDGET(ud->builder, "preview_hud");
-    if (!gtk_widget_get_visible(widget))
+    hud = GHB_WIDGET(ud->builder, "preview_hud");
+    if (!gtk_widget_get_visible(hud))
     {
-        gtk_widget_show(widget);
+        gtk_widget_show(hud);
     }
     hud_timeout_id = 0;
     in_hud = TRUE;
+#if !GTK_CHECK_VERSION(3, 90, 0)
     return FALSE;
+#endif
 }
 
+#if GTK_CHECK_VERSION(3, 90, 0)
+G_MODULE_EXPORT void
+hud_leave_cb(
+    GtkEventControllerMotion * econ,
+    GdkCrossingMode            cross,
+    GdkNotifyType              notify,
+    signal_user_data_t *ud)
+#else
 G_MODULE_EXPORT gboolean
 hud_leave_cb(
     GtkWidget *widget,
     GdkEventCrossing *event,
     signal_user_data_t *ud)
+#endif
 {
     in_hud = FALSE;
+#if !GTK_CHECK_VERSION(3, 90, 0)
     return FALSE;
+#endif
 }
 
+#if GTK_CHECK_VERSION(3, 90, 0)
+G_MODULE_EXPORT void
+preview_leave_cb(
+    GtkEventControllerMotion * econ,
+    GdkCrossingMode            cross,
+    GdkNotifyType              notify,
+    signal_user_data_t *ud)
+#else
 G_MODULE_EXPORT gboolean
 preview_leave_cb(
     GtkWidget *widget,
     GdkEventCrossing *event,
     signal_user_data_t *ud)
+#endif
 {
     if (hud_timeout_id != 0)
     {
@@ -1250,15 +1314,28 @@ preview_leave_cb(
             g_source_destroy(source);
     }
     hud_timeout_id = g_timeout_add(300, (GSourceFunc)hud_timeout, ud);
+#if !GTK_CHECK_VERSION(3, 90, 0)
     return FALSE;
+#endif
 }
 
+#if GTK_CHECK_VERSION(3, 90, 0)
+G_MODULE_EXPORT void
+preview_motion_cb(
+    GtkEventControllerMotion * econ,
+    gdouble                    x,
+    gdouble                    y,
+    signal_user_data_t *ud)
+#else
 G_MODULE_EXPORT gboolean
 preview_motion_cb(
     GtkWidget *widget,
     GdkEventMotion *event,
     signal_user_data_t *ud)
+#endif
 {
+    GtkWidget * hud;
+
     if (hud_timeout_id != 0)
     {
         GMainContext *mc;
@@ -1269,20 +1346,28 @@ preview_motion_cb(
         if (source != NULL)
             g_source_destroy(source);
     }
-    widget = GHB_WIDGET(ud->builder, "preview_hud");
-    if (!gtk_widget_get_visible(widget))
+    hud = GHB_WIDGET(ud->builder, "preview_hud");
+    if (!gtk_widget_get_visible(hud))
     {
-        gtk_widget_show(widget);
+        gtk_widget_show(hud);
     }
     if (!in_hud)
     {
         hud_timeout_id = g_timeout_add_seconds(4, (GSourceFunc)hud_timeout, ud);
     }
+#if !GTK_CHECK_VERSION(3, 90, 0)
     return FALSE;
+#endif
 }
 
-// TODO: GTK4 eliminated "configure-event" signal.  I believe
-// GdkPaintable "invalidate-size" is not the method to use?
+// TODO: GTK4 eliminated "configure-event" signal.
+// From a read of the gtk4 code, it appears GDK_CONFIGURE does
+// not get propagated.  And there is no way to set position of
+// a window :*(
+//
+// Hopefully they will fix this or provide a better alternative
+// before gtk4 is released.
+#if !GTK_CHECK_VERSION(3, 90, 0)
 G_MODULE_EXPORT gboolean
 preview_configure_cb(
     GtkWidget *widget,
@@ -1291,7 +1376,6 @@ preview_configure_cb(
 {
     if (gtk_widget_get_visible(widget))
     {
-#if !GTK_CHECK_VERSION(3, 90, 0)
         // TODO: can this be done in GTK4?
         gint x, y;
 
@@ -1301,10 +1385,10 @@ preview_configure_cb(
         ghb_pref_set(ud->prefs, "preview_x");
         ghb_pref_set(ud->prefs, "preview_y");
         ghb_prefs_store();
-#endif
     }
     return FALSE;
 }
+#endif
 
 #if !GTK_CHECK_VERSION(3, 90, 0)
 // GTK4 no longer has GDK_WINDOW_STATE events :*(
@@ -1338,14 +1422,24 @@ preview_state_cb(
 G_MODULE_EXPORT void
 preview_resize_cb(
     GtkWidget     *widget,
+#if GTK_CHECK_VERSION(3, 90, 0)
+    int width,
+    int height,
+    int baseline,
+#else
     GdkRectangle  *rect,
+#endif
     signal_user_data_t *ud)
 {
-    if (ud->preview->render_width != rect->width ||
-        ud->preview->render_height != rect->height)
+#if !GTK_CHECK_VERSION(3, 90, 0)
+    int width  = rect->width;
+    int height = rect->height;
+#endif
+    if (ud->preview->render_width != width ||
+        ud->preview->render_height != height)
     {
-        ud->preview->render_width  = rect->width;
-        ud->preview->render_height = rect->height;
+        ud->preview->render_width  = width;
+        ud->preview->render_height = height;
         if (ud->preview->scaled_pix != NULL)
             g_object_unref(ud->preview->scaled_pix);
         ud->preview->scaled_pix = do_preview_scaling(ud, ud->preview->pix);

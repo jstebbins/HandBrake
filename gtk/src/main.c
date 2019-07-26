@@ -991,6 +991,16 @@ ghb_idle_ui_init(signal_user_data_t *ud)
     return FALSE;
 }
 
+#if GTK_CHECK_VERSION(3, 90, 0)
+extern G_MODULE_EXPORT void easter_egg_multi_cb(void);
+extern G_MODULE_EXPORT void preview_leave_cb(void);
+extern G_MODULE_EXPORT void preview_motion_cb(void);
+extern G_MODULE_EXPORT void preview_draw_cb(GtkDrawingArea*, cairo_t*, int, int,
+                                            gpointer);
+extern G_MODULE_EXPORT void hud_enter_cb(void);
+extern G_MODULE_EXPORT void hud_leave_cb(void);
+#endif
+
 extern G_MODULE_EXPORT void
 ghb_activate_cb(GApplication * app, signal_user_data_t * ud)
 {
@@ -1306,6 +1316,34 @@ ghb_activate_cb(GApplication * app, signal_user_data_t * ud)
     gtk_application_add_window(GTK_APPLICATION(app), GTK_WINDOW(window));
     window = GHB_WIDGET(ud->builder, "queue_window");
     gtk_application_add_window(GTK_APPLICATION(app), GTK_WINDOW(window));
+
+#if GTK_CHECK_VERSION(3, 90, 0)
+    // GTK4 Event handling.
+    GtkGesture         * gest;
+    GtkEventController * econ;
+
+    // Easter egg multi-click
+    gest = gtk_gesture_multi_press_new();
+    widget = GHB_WIDGET(ud->builder, "easter_box");
+    gtk_widget_add_controller(widget, GTK_EVENT_CONTROLLER(gest));
+    g_signal_connect(gest, "pressed", easter_egg_multi_cb, ud);
+
+    // Preview HUD popup management via mouse motion
+    econ = gtk_event_controller_motion_new();
+    widget = GHB_WIDGET(ud->builder, "preview_image");
+    gtk_widget_add_controller(widget, econ);
+    g_signal_connect(econ, "leave", preview_leave_cb, ud);
+    g_signal_connect(econ, "motion", preview_motion_cb, ud);
+
+    gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(widget), preview_draw_cb,
+                                   ud, NULL);
+
+    econ = gtk_event_controller_motion_new();
+    widget = GHB_WIDGET(ud->builder, "preview_hud");
+    gtk_widget_add_controller(widget, econ);
+    g_signal_connect(econ, "enter", hud_enter_cb, ud);
+    g_signal_connect(econ, "leave", hud_leave_cb, ud);
+#endif
 
     gtk_widget_show(ghb_window);
 }

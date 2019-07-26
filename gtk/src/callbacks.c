@@ -2108,9 +2108,13 @@ destination_action_cb(GSimpleAction *action, GVariant *param,
 }
 
 G_MODULE_EXPORT gboolean
-window_destroy_event_cb(GtkWidget *widget, GdkEvent *event, signal_user_data_t *ud)
+window_destroy_event_cb(
+    GtkWidget *widget,
+#if !GTK_CHECK_VERSION(3, 90, 0)
+    GdkEvent *event,
+#endif
+    signal_user_data_t *ud)
 {
-    g_debug("window_destroy_event_cb ()");
     ghb_hb_cleanup(FALSE);
     prune_logs(ud);
     g_application_quit(G_APPLICATION(ud->app));
@@ -2985,18 +2989,6 @@ title_angle_changed_cb(GtkWidget *widget, signal_user_data_t *ud)
     ghb_dict_set_int(source, "Angle", ghb_dict_get_int(ud->settings, "angle"));
 }
 
-G_MODULE_EXPORT gboolean
-meta_focus_out_cb(GtkWidget *widget, GdkEventFocus *event,
-    signal_user_data_t *ud)
-{
-    const char *val;
-
-    ghb_widget_to_setting(ud->settings, widget);
-    val = ghb_dict_get_string(ud->settings, "MetaLongDescription");
-    update_meta(ud->settings, "LongDescription", val);
-    return FALSE;
-}
-
 G_MODULE_EXPORT void
 meta_name_changed_cb(GtkWidget *widget, signal_user_data_t *ud)
 {
@@ -3070,9 +3062,13 @@ meta_description_changed_cb(GtkWidget *widget, signal_user_data_t *ud)
 G_MODULE_EXPORT void
 plot_changed_cb(GtkWidget *widget, signal_user_data_t *ud)
 {
-    GtkWidget *textview;
+    GtkWidget  * textview;
+    const char * val;
+
     textview = GTK_WIDGET(GHB_WIDGET(ud->builder, "MetaLongDescription"));
     ghb_widget_to_setting(ud->settings, textview);
+    val = ghb_dict_get_string(ud->settings, "MetaLongDescription");
+    update_meta(ud->settings, "LongDescription", val);
 }
 
 G_MODULE_EXPORT void
@@ -4535,12 +4531,6 @@ guide_action_cb(GSimpleAction *action, GVariant *param, signal_user_data_t *ud)
     ghb_browse_uri(ud, HB_DOCS);
 }
 
-G_MODULE_EXPORT void
-hb_about_response_cb(GtkWidget *widget, gint response, signal_user_data_t *ud)
-{
-    gtk_widget_hide (widget);
-}
-
 static void
 update_queue_labels(signal_user_data_t *ud)
 {
@@ -5329,6 +5319,24 @@ easter_egg_timeout_cb(button_click_t *bc)
     return FALSE;
 }
 
+G_MODULE_EXPORT void
+easter_egg_multi_cb(
+    GtkGestureMultiPress * gest,
+    gint                   n_press,
+    gdouble                x,
+    gdouble                y,
+    signal_user_data_t   * ud)
+{
+    if (n_press == 3)
+    {
+        GtkWidget *widget;
+        widget = GHB_WIDGET(ud->builder, "allow_tweaks");
+        gtk_widget_show(widget);
+        widget = GHB_WIDGET(ud->builder, "hbfd_feature");
+        gtk_widget_show(widget);
+    }
+}
+
 G_MODULE_EXPORT gboolean
 easter_egg_cb(
     GtkWidget *widget,
@@ -5629,16 +5637,24 @@ ghb_notify_done(signal_user_data_t *ud)
 G_MODULE_EXPORT gboolean
 window_map_cb(
     GtkWidget *widget,
+#if !GTK_CHECK_VERSION(3, 90, 0)
     GdkEventAny *event,
+#endif
     signal_user_data_t *ud)
 {
     return FALSE;
 }
 
-G_MODULE_EXPORT gboolean
-window_configure_cb(
+G_MODULE_EXPORT void
+hb_win_sz_alloc_cb(
     GtkWidget *widget,
-    GdkEventConfigure *event,
+#if GTK_CHECK_VERSION(3, 90, 0)
+    int width,
+    int height,
+    int baseline,
+#else
+    GdkRectangle *rect,
+#endif
     signal_user_data_t *ud)
 {
     if (gtk_widget_get_visible(widget))
@@ -5657,7 +5673,6 @@ window_configure_cb(
             ghb_prefs_store();
         }
     }
-    return FALSE;
 }
 
 static void container_empty_cb(GtkWidget *widget, gpointer data)

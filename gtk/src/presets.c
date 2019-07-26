@@ -1161,10 +1161,16 @@ presets_window_delete_cb(
     return TRUE;
 }
 
-G_MODULE_EXPORT gboolean
-presets_window_configure_cb(
+G_MODULE_EXPORT void
+presets_sz_alloc_cb(
     GtkWidget *widget,
-    GdkEventConfigure *event,
+#if GTK_CHECK_VERSION(3, 90, 0)
+    int width,
+    int height,
+    int baseline,
+#else
+    GdkRectangel *rect,
+#endif
     signal_user_data_t *ud)
 {
     if (gtk_widget_get_visible(widget))
@@ -1183,7 +1189,6 @@ presets_window_configure_cb(
             ghb_prefs_store();
         }
     }
-    return FALSE;
 }
 
 G_MODULE_EXPORT void
