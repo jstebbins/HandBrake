@@ -1469,6 +1469,7 @@ Copyright © 2004 - , HandBrake Devs</property>
     <property name="comments" translatable="yes">HandBrake is a GPL-licensed, multiplatform, multithreaded video transcoder.</property>
     <property name="website">https://handbrake.fr</property>
     <property name="website_label" translatable="yes">https://handbrake.fr</property>
+    <property name="license-type">GTK_LICENSE_GPL_2_0_ONLY</property>
     <property name="license" translatable="yes">HandBrake is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.
 
 HandBrake is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
@@ -2196,7 +2197,7 @@ libx264 authors:
                     </child>
                     <child>
                       <object class="GtkProgressBar" id="scan_prog">
-                        <property name="visible">True</property>
+                        <property name="visible">False</property>
                         <property name="height_request">10</property>
                         <property name="can_focus">False</property>
                         <property name="valign">center</property>
@@ -5825,6 +5826,7 @@ Only one subtitle track can be burned! Since conflicts can occur, the first chos
         </child>
         <child>
           <object class="GtkProgressBar" id="progressbar">
+            <property name="visible">False</property>
             <property name="height_request">10</property>
             <property name="can_focus">False</property>
             <property name="margin-bottom">6</property>
@@ -6511,6 +6513,7 @@ Uncheck this if you want to allow changing each title's settings independently.<
                     <property name="can_focus">False</property>
                     <child>
                       <object class="GtkCheckButton" id="allow_tweaks">
+                        <property name="visible">False</property>
                         <property name="label" translatable="yes">Allow Tweaks</property>
                         <property name="can_focus">True</property>
                         <property name="receives_default">False</property>
@@ -6525,6 +6528,7 @@ Uncheck this if you want to allow changing each title's settings independently.<
                     </child>
                     <child>
                       <object class="GtkCheckButton" id="hbfd_feature">
+                        <property name="visible">False</property>
                         <property name="label" translatable="yes">Allow HandBrake For Dummies</property>
                         <property name="can_focus">True</property>
                         <property name="receives_default">False</property>

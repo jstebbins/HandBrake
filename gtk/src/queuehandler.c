@@ -1483,6 +1483,7 @@ add_to_queue_list(signal_user_data_t *ud, GhbValue *queueDict)
     progress = gtk_progress_bar_new();
     gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(progress), 0.0);
     gtk_widget_set_name(progress, "queue_item_progress");
+    gtk_widget_set_visible(progress, FALSE);
 
     ghb_box_append_child(dbox, GTK_WIDGET(status_icon));
     ghb_box_append_child(dbox, GTK_WIDGET(dest_label));
