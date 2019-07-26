@@ -6957,19 +6957,26 @@ Setting this to 0 means there is no maximum height.</property>
     <property name="icon-name">hb-icon</property>
     <signal name="close-request" handler="preview_window_delete_cb" swapped="no"/>
     <child>
-      <object class="GtkDrawingArea" id="preview_image">
-        <property name="width_request">854</property>
-        <property name="height_request">480</property>
+      <object class="GtkOverlay" id="preview_overlay">
         <property name="visible">True</property>
-        <property name="can_focus">False</property>
-        <property name="hexpand-set">True</property>
-        <property name="vexpand-set">True</property>
         <property name="hexpand">True</property>
         <property name="vexpand">True</property>
         <property name="halign">fill</property>
         <property name="valign">fill</property>
-        <signal name="size-allocate" handler="preview_resize_cb" swapped="no"/>
         <child>
+          <object class="GtkDrawingArea" id="preview_image">
+            <property name="width_request">854</property>
+            <property name="height_request">480</property>
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <property name="hexpand">True</property>
+            <property name="vexpand">True</property>
+            <property name="halign">fill</property>
+            <property name="valign">fill</property>
+            <signal name="size-allocate" handler="preview_resize_cb" swapped="no"/>
+          </object>
+        </child>
+        <child type="overlay">
           <object class="GtkBox" id="preview_hud">
             <property name="orientation">horizontal</property>
             <property name="visible">False</property>

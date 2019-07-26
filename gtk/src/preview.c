@@ -1213,6 +1213,8 @@ preview_duration_changed_cb(GtkWidget *widget, signal_user_data_t *ud)
 
 static guint hud_timeout_id = 0;
 
+static gboolean in_hud = FALSE;
+
 static gboolean
 hud_timeout(signal_user_data_t *ud)
 {
@@ -1224,8 +1226,6 @@ hud_timeout(signal_user_data_t *ud)
     hud_timeout_id = 0;
     return FALSE;
 }
-
-static gboolean in_hud = FALSE;
 
 #if GTK_CHECK_VERSION(3, 90, 0)
 G_MODULE_EXPORT void
