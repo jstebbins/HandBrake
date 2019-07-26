@@ -3303,7 +3303,7 @@ queue_drag_data_get_cb(GtkWidget          * widget,
 
     row = gtk_widget_get_ancestor(widget, GTK_TYPE_LIST_BOX_ROW);
     gtk_selection_data_set(selection_data,
-                       g_intern_static_string("GTK_LIST_BOX_ROW"), 32,
+                       ghb_atom_string("GTK_LIST_BOX_ROW"), 32,
                        (const guchar *)&row, sizeof (gpointer));
 }
 

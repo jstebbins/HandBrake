@@ -1169,7 +1169,7 @@ presets_sz_alloc_cb(
     int height,
     int baseline,
 #else
-    GdkRectangel *rect,
+    GdkRectangle *rect,
 #endif
     signal_user_data_t *ud)
 {

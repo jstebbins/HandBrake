@@ -338,7 +338,7 @@ static inline const gchar * ghb_entry_get_text(GtkEntry * entry)
 
 static inline void ghb_entry_set_text(GtkEntry * entry, const gchar * text)
 {
-    return gtk_entry_set_text(entry);
+    return gtk_entry_set_text(entry, text);
 }
 #endif
 
@@ -425,6 +425,18 @@ static inline void ghb_entry_set_width_chars(GtkEntry * entry, gint n_chars)
 static inline void ghb_entry_set_width_chars(GtkEntry * entry, gint n_chars)
 {
     gtk_entry_set_width_chars(entry, n_chars);
+}
+#endif
+
+#if GTK_CHECK_VERSION(3, 90, 0)
+static inline GdkAtom ghb_atom_string(const char * str)
+{
+    return g_intern_static_string(str);
+}
+#else
+static inline GdkAtom ghb_atom_string(const char * str)
+{
+    return gdk_atom_intern_static_string(str);
 }
 #endif
 
